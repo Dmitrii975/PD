@@ -3,7 +3,8 @@ import sys
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                            QHBoxLayout, QPushButton, QStackedWidget, QFrame, QLabel,
                            QLineEdit, QSpacerItem, QSizePolicy, QScrollArea, QInputDialog, 
-                           QDialog, QFormLayout, QFileDialog, QGridLayout, QComboBox)
+                           QDialog, QFormLayout, QFileDialog, QGridLayout, QComboBox, QDoubleSpinBox,
+                           QAbstractSpinBox)
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QFont, QPalette, QColor
 from server import *
@@ -818,47 +819,399 @@ class AnalysisScreen(QWidget):
         
         self.plot_sine_wave()
 
-class ForecastScreen(QWidget):
+class Wall(QWidget):
     def __init__(self):
         super().__init__()
-        self.setStyleSheet("background-color: #fffaf0; border-radius: 15px;")
-        layout = QVBoxLayout()
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.setContentsMargins(50, 50, 50, 50)
+        self.setStyleSheet("background-color: #fffaf0;")
         
-        label = QLabel("📈 Страница прогнозирования")
-        label.setStyleSheet("font-size: 24px; color: #5a3921; font-weight: bold;")
-        layout.addWidget(label)
+        # Основной layout
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(10)
         
-        self.setLayout(layout)
+        # Заголовок
+        title = QLabel("Объявления")
+        title.setStyleSheet("font-size: 24px; font-weight: bold; color: #5a3921;")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(title)
+        
+        # Создаем прокручиваемую область
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setStyleSheet("background: transparent; border: none;")
+        main_layout.addWidget(scroll_area)
+        
+        # Контейнер для объявлений
+        container = QWidget()
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(10)
+        
+        # Данные объявлений
+        announcements = [
+            ["Компания 1", "50", "3 дня"],
+            ["Компания 2", "200", "5 дней"],
+            ["Склад-партнер", "150", "2 дня"],
+            ["Логистик-Хаб", "300", "7 дней"],
+            ["Доп. Компания", "75", "1 день"],
+            ["Еще одна", "250", "4 дня"],
+            ["Тестовая", "100", "6 дней"],
+            ["Пример", "400", "2 дня"]
+        ]
+        
+        # Создание блоков объявлений
+        for announcement in announcements:
+            block = QWidget()
+            block.setStyleSheet("""
+                QWidget {
+                    background-color: #ffbd8c;
+                    border-radius: 8px;
+                    margin: 5px;
+                }
+            """)
+            block.setFixedHeight(55)  # Фиксированная высота для каждого блока
+            
+            block_layout = QHBoxLayout(block)
+            block_layout.setContentsMargins(15, 5, 15, 5)
+            block_layout.setSpacing(15)
+            
+            # Название компании
+            company_label = QLabel(announcement[0])
+            company_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #5a3921;")
+            company_label.setFixedWidth(150)
+            
+            # Информация в одной строке
+            info_layout = QHBoxLayout()
+            info_layout.setSpacing(15)
+            info_layout.setContentsMargins(0, 0, 0, 0)
+            
+            # Количество излишков
+            quantity_label = QLabel(f"Кол-во: {announcement[1]} е.т")
+            quantity_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #5a3921;")
+            
+            # Вертикальная разделительная линия
+            separator = QFrame()
+            separator.setFrameShape(QFrame.Shape.VLine)
+            separator.setFrameShadow(QFrame.Shadow.Sunken)
+            separator.setStyleSheet("color: #e67e22;")
+            separator.setFixedWidth(1)
+            
+            # Срок доставки
+            delivery_label = QLabel(f"Срок: {announcement[2]} дн.")
+            delivery_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #5a3921;")
+            
+            info_layout.addWidget(quantity_label)
+            info_layout.addWidget(separator)
+            info_layout.addWidget(delivery_label)
+            
+            # Кнопка оформления
+            order_btn = QPushButton("Оформить")
+            order_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #2c3e50; 
+                    color: white; 
+                    border-radius: 5px; 
+                    padding: 8px 15px;
+                    font-weight: bold;
+                    min-width: 100px;
+                }
+                QPushButton:hover {
+                    background-color: #34495e;
+                }
+            """)
+            
+            block_layout.addWidget(company_label)
+            block_layout.addStretch()
+            block_layout.addLayout(info_layout)
+            block_layout.addWidget(order_btn)
+            
+            container_layout.addWidget(block)
+        
+        # Добавляем растягивающийся элемент в конец
+        container_layout.addStretch()
+        
+        scroll_area.setWidget(container)
 
 class SettingsScreen(QWidget):
     def __init__(self):
         super().__init__()
         self.setStyleSheet("background-color: #fffaf0; border-radius: 15px;")
-        layout = QVBoxLayout()
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.setContentsMargins(50, 50, 50, 50)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(10)
         
-        label = QLabel("⚙️ Настройки приложения")
-        label.setStyleSheet("font-size: 24px; color: #5a3921; font-weight: bold;")
-        layout.addWidget(label)
+        # Заголовок
+        title = QLabel("⚙️ Настройки приложения")
+        title.setStyleSheet("font-size: 24px; color: #5a3921; font-weight: bold;")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(title)
         
-        self.setLayout(layout)
+        # Данные настроек
+        settings_list = [
+            ["Максимальная загрузка склада", 85.5],
+            ["Порог уведомления", 90.0],
+            ["Частота обновления данных (мин)", 5.0],
+            ["Минимальное свободное место", 10.0],
+            ["Срок хранения данных (дней)", 30.0]
+        ]
+        
+        # Создание блоков настроек
+        for name, value in settings_list:
+            setting_container = QFrame()
+            setting_container.setStyleSheet("""
+                QFrame {
+                    background-color: #ffbd8c;
+                    border-radius: 8px;
+                    margin: 3px;
+                    padding: 8px;
+                }
+            """)
+            setting_layout = QHBoxLayout(setting_container)
+            setting_layout.setContentsMargins(5, 5, 5, 5)
+            setting_layout.setSpacing(10)
+            
+            # Название настройки
+            label = QLabel(name)
+            label.setStyleSheet("font-size: 13px; color: #5a3921;")
+            label.setFixedWidth(220)
+            
+            # Поле ввода числа (без кнопок-спиннеров)
+            spinbox = QDoubleSpinBox()
+            spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+            spinbox.setValue(value)
+            spinbox.setRange(0, 1000)
+            spinbox.setSingleStep(0.5)
+            spinbox.setStyleSheet("""
+                QDoubleSpinBox {
+                    background-color: white;
+                    border: 1px solid #e67e22;
+                    border-radius: 5px;
+                    padding: 4px 10px;
+                    font-size: 13px;
+                    color: #5a3921;
+                }
+                QDoubleSpinBox:focus {
+                    border-color: #d35400;
+                }
+            """)
+            spinbox.editingFinished.connect(lambda n=name, sb=spinbox: self.setting_changed(n, sb.value()))
+            
+            setting_layout.addWidget(label)
+            setting_layout.addWidget(spinbox)
+            setting_layout.addStretch()
+            
+            main_layout.addWidget(setting_container)
+        
+        # Добавляем растягивающийся элемент перед кнопкой
+        main_layout.addStretch()
+        
+        # Кнопка "Добавить день" внизу слева
+        add_day_btn = QPushButton("Добавить день")
+        add_day_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e0e0e0;
+                color: #5a3921;
+                border: 1px solid #c0c0c0;
+                border-radius: 5px;
+                padding: 8px 15px;
+                font-weight: bold;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+        """)
+        add_day_btn.clicked.connect(self.add_day)
+        
+        btn_layout = QHBoxLayout()
+        btn_layout.addWidget(add_day_btn)
+        btn_layout.addStretch()
+        
+        main_layout.addLayout(btn_layout)
+
+    def setting_changed(self, name, value):
+        """Обработчик изменения настройки (срабатывает после завершения редактирования)"""
+        print(f"Изменение сохранено: {name} = {value}")
+    
+    def add_day(self):
+        """Заглушка для кнопки 'Добавить день'"""
+        print("Добавлен новый день")
 
 class AccountScreen(QWidget):
     def __init__(self):
         super().__init__()
         self.setStyleSheet("background-color: #fffaf0; border-radius: 15px;")
-        layout = QVBoxLayout()
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.setContentsMargins(50, 50, 50, 50)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(15)
         
-        label = QLabel("👤 Управление аккаунтом")
-        label.setStyleSheet("font-size: 24px; color: #5a3921; font-weight: bold;")
-        layout.addWidget(label)
+        # Заголовок
+        title = QLabel("Информация о пользователе")
+        title.setStyleSheet("font-size: 24px; color: #5a3921; font-weight: bold;")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(title)
         
-        self.setLayout(layout)
+        # Контейнер для полей
+        form_container = QFrame()
+        form_container.setStyleSheet("""
+            QFrame {
+                background-color: #ffbd8c;
+                border-radius: 10px;
+                margin: 15px;
+                padding: 20px;
+            }
+        """)
+        form_layout = QVBoxLayout(form_container)
+        form_layout.setContentsMargins(10, 10, 10, 10)
+        form_layout.setSpacing(25)
+        
+        # Наименование компании
+        company_layout = QHBoxLayout()
+        company_layout.setSpacing(15)
+        
+        company_label = QLabel("Наименование компании:")
+        company_label.setStyleSheet("color: #5a3921; font-size: 18px; font-weight: bold; padding-left: 5px;")
+        company_label.setFixedWidth(350)  # Увеличена ширина метки
+        
+        self.company_input = QLineEdit("ООО 'Склад-Партнер'")
+        self.company_input.setReadOnly(True)
+        self.company_input.setStyleSheet("""
+            QLineEdit {
+                background-color: white;
+                border: 1px solid #e67e22;
+                border-radius: 5px;
+                padding: 10px 15px;
+                font-size: 16px;
+                color: #5a3921;
+            }
+        """)
+        self.company_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.company_input.setFixedHeight(40)
+        
+        company_layout.addWidget(company_label)
+        company_layout.addWidget(self.company_input)
+        
+        # Электронная почта
+        email_layout = QHBoxLayout()
+        email_layout.setSpacing(15)
+        
+        email_label = QLabel("Электронная почта:")
+        email_label.setStyleSheet("color: #5a3921; font-size: 18px; font-weight: bold; padding-left: 5px;")
+        email_label.setFixedWidth(350)  # Увеличена ширина метки
+        
+        self.email_input = QLineEdit("user@example.com")
+        self.email_input.setReadOnly(True)
+        self.email_input.setStyleSheet("""
+            QLineEdit {
+                background-color: white;
+                border: 1px solid #e67e22;
+                border-radius: 5px;
+                padding: 10px 15px;
+                font-size: 16px;
+                color: #5a3921;
+            }
+        """)
+        self.email_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.email_input.setFixedHeight(40)
+        
+        email_layout.addWidget(email_label)
+        email_layout.addWidget(self.email_input)
+        
+        form_layout.addLayout(company_layout)
+        form_layout.addLayout(email_layout)
+        
+        # Добавляем растягивающийся элемент перед кнопками
+        form_layout.addStretch()
+        
+        # Кнопки управления
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(10)
+        button_layout.setContentsMargins(10, 10, 10, 10)
+        
+        # Добавляем растягивающийся элемент для прижатия кнопок к правому краю
+        button_layout.addStretch()
+        
+        # Кнопки в нужном порядке
+        delete_account_btn = QPushButton("Удалить аккаунт")
+        delete_account_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f0f0f0;
+                color: #e74c3c;
+                border: 1px solid #e0e0e0;
+                border-radius: 5px;
+                padding: 12px 20px;
+                font-weight: bold;
+                font-size: 14px;
+                min-width: 140px;
+            }
+            QPushButton:hover {
+                background-color: #e0e0e0;
+                color: #c0392b;
+            }
+        """)
+        
+        logout_btn = QPushButton("Выйти из аккаунта")
+        logout_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e0e0e0;
+                color: #5a3921;
+                border: 1px solid #c0c0c0;
+                border-radius: 5px;
+                padding: 12px 20px;
+                font-weight: bold;
+                font-size: 14px;
+                min-width: 140px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+        """)
+        
+        clear_data_btn = QPushButton("Очистить данные")
+        clear_data_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f0f0f0;
+                color: #e67e22;
+                border: 1px solid #e0e0e0;
+                border-radius: 5px;
+                padding: 12px 20px;
+                font-weight: bold;
+                font-size: 14px;
+                min-width: 140px;
+            }
+            QPushButton:hover {
+                background-color: #e0e0e0;
+                color: #d35400;
+            }
+        """)
+        
+        change_pass_btn = QPushButton("Сменить пароль")
+        change_pass_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e0e0e0;
+                color: #5a3921;
+                border: 1px solid #c0c0c0;
+                border-radius: 5px;
+                padding: 12px 20px;
+                font-weight: bold;
+                font-size: 14px;
+                min-width: 140px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+        """)
+        
+        # Добавляем кнопки в нужном порядке
+        
+        button_layout.addWidget(change_pass_btn)
+        button_layout.addWidget(clear_data_btn)
+        button_layout.addWidget(logout_btn)
+        button_layout.addWidget(delete_account_btn)
+
+        form_layout.addLayout(button_layout)
+        
+        main_layout.addWidget(form_container)
 
 class MenuButton(QPushButton):
     """Кастомная кнопка меню с анимацией и иконками"""
@@ -962,9 +1315,9 @@ class MainInterface(QWidget):
         self.screens = [
             HomeScreen(),
             AnalysisScreen(),
-            ForecastScreen(),
-            SettingsScreen(),
-            AccountScreen()
+            Wall(),
+            AccountScreen(),
+            SettingsScreen()
         ]
         
         for screen in self.screens:
@@ -1034,11 +1387,11 @@ class MainInterface(QWidget):
         self.stacked_widget.setCurrentIndex(2)
         self.highlight_button(2)
     
-    def show_settings(self):
+    def show_account(self):
         self.stacked_widget.setCurrentIndex(3)
         self.highlight_button(3)
-    
-    def show_account(self):
+
+    def show_settings(self):
         self.stacked_widget.setCurrentIndex(4)
         self.highlight_button(4)
 
