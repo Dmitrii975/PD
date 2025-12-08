@@ -2,14 +2,45 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from vars import get_calculated_vars
 import numpy as np
+import json
 
 
-def calculate_metrics(pth, hsh) -> dict: #Возвращем метрики для анализа
+START = None
+END = None
+
+def set_end(v):
+    global END
+    END = v
+
+def set_start(v):
+    global START
+    START = v
+
+def get_end():
+    return END
+
+def get_start():
+    return START
+
+def read_analys_data(hsh):
+    v = get_calculated_vars(hsh)
+    set_start(v['START'])
+    set_end(v['END'])
+
+def write_analys_data(hsh):
+    v = get_calculated_vars(hsh)
+    del v['DATA']
+    v['START'] = get_start()
+    v['END'] = get_end()
+    with open(f'.cache/{hsh}/userdata.json', 'w') as f:
+        json.dump(v, f)
+
+def calculate_metrics(pth, hsh, START, END) -> dict: #Возвращем метрики для анализа
     vrs = get_calculated_vars(hsh)
 
     metrics = dict()
     df = pd.read_csv(pth)
-    df = df.iloc[-30:]
+    df = df.iloc[START:END]
     metrics['avg_fullness'] = round(df['inventory'].mean() / df['max_space'].iloc[0] * 100, 2)
     metrics['status'] = df['inventory'].iloc[-1] >= vrs['ACTION_ON']
     metrics['cur_fullness'] = round(df['inventory'].iloc[-1] / df['max_space'].iloc[0] * 100, 2)
@@ -21,10 +52,10 @@ def calculate_metrics(pth, hsh) -> dict: #Возвращем метрики дл
     return metrics
 
 
-def make_plot(pth, figure, canvas): # Под главный график заготовка
+def make_plot(pth, figure, canvas, START, END): # Под главный график заготовка
     """Создает график синусоиды"""
     df = pd.read_csv(pth)
-    df = df.iloc[-60:]
+    df = df.iloc[START:END]
     figure.clear()
     ax = figure.add_subplot(111)
     
