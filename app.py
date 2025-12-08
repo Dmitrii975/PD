@@ -1975,7 +1975,55 @@ class MainInterface(QWidget):
         sidebar_layout.setSpacing(5)
         sidebar_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         
-        # Кнопки меню с иконками (изменены на соответствие фото)
+        # ====== Логотип и название компании ======
+        header_container = QFrame()
+        header_container.setStyleSheet("""
+            QFrame {
+                background-color: transparent;
+                padding: 0 10px 10px 10px;
+                margin: 0;
+            }
+        """)
+        header_layout = QHBoxLayout(header_container)
+        header_layout.setContentsMargins(15, 0, 15, 0)
+        header_layout.setSpacing(6)
+        
+        # Логотип
+        logo_label = QLabel()
+        logo_label.setStyleSheet("""
+            QLabel {
+                background: transparent;
+                min-width: 60px;
+                text-align: center;
+            }
+        """)
+        logo_label.setFixedWidth(60)
+        logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        logo_pixmap = QPixmap("icons/logo.png")
+        if not logo_pixmap.isNull():
+            logo_pixmap = logo_pixmap.scaledToHeight(48, Qt.TransformationMode.SmoothTransformation)
+            logo_label.setPixmap(logo_pixmap)
+        
+        # Название компании
+        company_name_label = QLabel("Излишков.net")
+        company_name_label.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                font-weight: 500;
+                color: #5a3921;
+                background: transparent;
+            }
+        """)
+        company_name_label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        
+        header_layout.addWidget(logo_label)
+        header_layout.addWidget(company_name_label)
+        header_layout.addStretch()
+        
+        sidebar_layout.addWidget(header_container)
+        
+        # ====== Кнопки меню ======
         menu_items = [
             ("icons/home.png", "Главная", self.show_home),
             ("icons/analysis.png", "Анализ & Прогноз", self.show_analysis),
@@ -1992,6 +2040,54 @@ class MainInterface(QWidget):
             self.menu_buttons.append(btn)
         
         sidebar_layout.addStretch()
+        
+        # ====== Плашка с датой внизу ======
+        date_container = QFrame()
+        date_container.setStyleSheet("""
+            QFrame {
+                background-color: rgba(230, 126, 34, 0.2);
+                border-radius: 8px;
+                padding: 10px;
+                margin: 0 10px;
+            }
+        """)
+        date_layout = QVBoxLayout(date_container)
+        date_layout.setContentsMargins(10, 8, 10, 8)
+        date_layout.setSpacing(0)
+        
+        # Получаем дату из переменных
+        try:
+            vrs = get_calculated_vars(get_hash())
+            current_date = vrs.get('DATA')
+            date_text = current_date.strftime("%d.%m.%Y") if current_date else "--"
+        except:
+            date_text = "--"
+        
+        date_label = QLabel(date_text)
+        date_label.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                font-weight: bold;
+                color: #5a3921;
+                background: transparent;
+            }
+        """)
+        date_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        date_title = QLabel("Текущая дата")
+        date_title.setStyleSheet("""
+            QLabel {
+                font-size: 11px;
+                color: #8B6F47;
+                background: transparent;
+            }
+        """)
+        date_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        date_layout.addWidget(date_title)
+        date_layout.addWidget(date_label)
+        
+        sidebar_layout.addWidget(date_container)
         
         # ====== Контентная область ======
         content_area = QFrame()
