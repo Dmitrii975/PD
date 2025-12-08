@@ -4,8 +4,8 @@ from vars import get_calculated_vars
 import numpy as np
 
 
-def calculate_metrics(pth) -> dict: #Возвращем метрики для анализа
-    vrs = get_calculated_vars()
+def calculate_metrics(pth, hsh) -> dict: #Возвращем метрики для анализа
+    vrs = get_calculated_vars(hsh)
 
     metrics = dict()
     df = pd.read_csv(pth)
@@ -130,8 +130,4 @@ def make_plot(pth, figure, canvas): # Под главный график заг�
     
     # Обновляем холст
     canvas.draw()
-
-if __name__ == '__main__':
-    get_calculated_vars()
-    print(calculate_metrics('test.csv'))
 

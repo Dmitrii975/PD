@@ -16,6 +16,8 @@ import pandas as pd
 from analys import calculate_metrics, make_plot
 import pickle
 import os
+import hashlib
+
 
 WAREHOUSES = []
 
@@ -26,7 +28,7 @@ def set_user_id(uid):
     global USER_ID, UH
 
     USER_ID = uid
-    UH = hash(str(uid))
+    UH = hashlib.md5(str(uid).encode('utf-8')).hexdigest()
 
 def get_user_id():
     return USER_ID
@@ -52,14 +54,14 @@ def get_warehouses():
 
 def read_warehouses():
     if os.path.exists(f'.cache/{get_hash()}/warehouses.pickle'):
-        with open(f'.cache/{get_hash}/warehouses.pickle', 'rb') as f:
+        with open(f'.cache/{get_hash()}/warehouses.pickle', 'rb') as f:
             data = pickle.load(f)
         for i in data:
             add_warehouse(i)
 
 def write_warehouses():
     wh = get_warehouses()
-    with open(f'.cache/{get_hash}/warehouses.pickle', 'wb') as f:
+    with open(f'.cache/{get_hash()}/warehouses.pickle', 'wb') as f:
         pickle.dump(wh, f)
 
 class LoginScreen(QWidget):
@@ -509,7 +511,7 @@ class HomeScreen(QWidget):
         file_path = warehouse_data.get('file_path', '')
         
         # ВЫЧИСЛЯЕМ СТАТУС ДИНАМИЧЕСКИ на основе текущих метрик
-        metrics = calculate_metrics(file_path)
+        metrics = calculate_metrics(file_path, get_hash())
         load_percentage = metrics.get('cur_fullness')
         status = metrics.get('status', False)  # Динамически вычисляем!
         
@@ -732,7 +734,7 @@ class HomeScreen(QWidget):
             
             if file_path:
                 # Пересчитываем метрики
-                metrics = calculate_metrics(file_path)
+                metrics = calculate_metrics(file_path, get_hash())
                 status = metrics.get('status', False)
                 
                 # Находим статус лейбл
@@ -1006,7 +1008,7 @@ class AnalysisScreen(QWidget):
         # Заполняем статистику
         warehouse_info = self.warehouse_data[warehouse_index]
         # Используйте реальные данные из warehouse_info
-        metrics = calculate_metrics(warehouse_info['file_path'])
+        metrics = calculate_metrics(warehouse_info['file_path'], get_hash())
         stats_data = {
             "Загруженность": f"{metrics['cur_fullness']}%",
             "Средняя загруженность": f"{metrics['avg_fullness']}%.",
@@ -1674,25 +1676,18 @@ class MainApp(QMainWindow):
         super().__init__()
         self.setWindowTitle("Аналитическое приложение")
         self.setGeometry(100, 100, 1100, 750)
-        
-        # Настройка светлой темы для всего приложения
         self.setup_light_theme()
-        
-        # Центральный виджет - стек для переключения между экранами входа и основным интерфейсом
+
         self.central_widget = QStackedWidget()
         self.setCentralWidget(self.central_widget)
-        
-        # Создание экранов
+
         self.login_screen = LoginScreen(self)
         self.register_screen = RegisterScreen(self)
-        self.main_interface = MainInterface(self)
-        
-        # Добавление экранов в стек
+        # НЕ создаём self.main_interface здесь!
+
         self.central_widget.addWidget(self.login_screen)    # index 0
         self.central_widget.addWidget(self.register_screen) # index 1
-        self.central_widget.addWidget(self.main_interface)  # index 2
-        
-        # По умолчанию показываем экран входа
+
         self.show_login_screen()
     
     def setup_light_theme(self):
@@ -1724,24 +1719,28 @@ class MainApp(QMainWindow):
         self.central_widget.setCurrentIndex(1)
     
     def show_main_interface(self):
-        self.central_widget.setCurrentIndex(2)
+        # Устанавливаем USER_ID (заглушка)
+        set_user_id(-1)
+        print(get_hash())
+        # Инициализируем склады из кэша (если есть)
+        read_warehouses()
+
+        # Создаём MainInterface только при первом вызове
+        if not hasattr(self, 'main_interface'):
+            self.main_interface = MainInterface(self)
+            self.central_widget.addWidget(self.main_interface)
+
+        self.central_widget.setCurrentWidget(self.main_interface)
 
 if __name__ == "__main__":
-
-    set_user_id(-1)
-
-    vrs = get_calculated_vars(get_user_id())
-
-    read_warehouses()
-
     app = QApplication(sys.argv)
-    
-    # Установка глобального шрифта
     font = QFont("Segoe UI", 11)
     app.setFont(font)
-    
-    app.aboutToQuit.connect(write_warehouses)
 
     window = MainApp()
     window.show()
+
+    # Сохранение складов при выходе
+    app.aboutToQuit.connect(write_warehouses)
+
     sys.exit(app.exec())
