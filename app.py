@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                            QDialog, QFormLayout, QFileDialog, QGridLayout, QComboBox, QDoubleSpinBox,
                            QAbstractSpinBox, QMessageBox)
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QFont, QPalette, QColor
+from PyQt6.QtGui import QFont, QPalette, QColor, QPixmap
 from server import *
 from vars import *
 from matplotlib.figure import Figure
@@ -1504,23 +1504,49 @@ class AccountScreen(QWidget):
 
 class MenuButton(QPushButton):
     """Кастомная кнопка меню с анимацией и иконками"""
-    def __init__(self, icon_text, text, parent=None):
+    def __init__(self, icon_path, text, parent=None):
         super().__init__(parent)
         self.setFixedHeight(50)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         
-        # Основной контент кнопки
-        layout = QHBoxLayout()
-        layout.setContentsMargins(25, 0, 25, 0)
-        layout.setSpacing(15)
+        # Контейнер для содержимого (обычный виджет, а не сама кнопка)
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
         
-        # Иконка (используем текст-эмоджи как иконку)
-        icon_label = QLabel(icon_text)
-        icon_label.setStyleSheet("font-size: 20px; color: #5a3921; background: transparent;")
+        # Основной горизонтальный layout
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(15, 0, 15, 0)
+        layout.setSpacing(12)
+        
+        # Иконка как отдельный элемент слева (PNG картинка)
+        icon_label = QLabel()
+        icon_label.setStyleSheet("""
+            QLabel {
+                background: transparent;
+                min-width: 30px;
+                text-align: center;
+            }
+        """)
+        icon_label.setFixedWidth(30)
+        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # Загружаем изображение
+        if icon_path:
+            pixmap = QPixmap(icon_path)
+            # Масштабируем до 24x24 пикселей
+            pixmap = pixmap.scaledToHeight(24, Qt.TransformationMode.SmoothTransformation)
+            icon_label.setPixmap(pixmap)
         
         # Текст кнопки
         text_label = QLabel(text)
-        text_label.setStyleSheet("font-size: 14px; font-weight: 500; color: #5a3921; background: transparent;")
+        text_label.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                font-weight: 500;
+                color: #5a3921;
+                background: transparent;
+            }
+        """)
         
         layout.addWidget(icon_label)
         layout.addWidget(text_label)
@@ -1531,7 +1557,6 @@ class MenuButton(QPushButton):
         # Начальный стиль кнопки
         self.setStyleSheet("""
             QPushButton {
-                text-align: left;
                 border: none;
                 border-radius: 10px;
                 background-color: transparent;
@@ -1568,11 +1593,11 @@ class MainInterface(QWidget):
         
         # Кнопки меню с иконками (изменены на соответствие фото)
         menu_items = [
-            ("🏠", "Главная", self.show_home),
-            ("🔍📈", "Анализ & Прогноз", self.show_analysis),
-            ("📢", "Объявление", self.show_forecast),
-            ("👤", "Аккаунт", self.show_account),
-            ("⚙️", "Настройки", self.show_settings)
+            ("icons/home.png", "Главная", self.show_home),
+            ("icons/analysis.png", "Анализ & Прогноз", self.show_analysis),
+            ("icons/announcement.png", "Объявление", self.show_forecast),
+            ("icons/account.png", "Аккаунт", self.show_account),
+            ("icons/settings.png", "Настройки", self.show_settings)
         ]
         
         self.menu_buttons = []
