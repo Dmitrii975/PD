@@ -1,8 +1,4 @@
 {
-    "user_id": -1,
-    "tables_path": ".cache/tables/",
-    "user_data_path": ".cache/userdata.json",
     "target_inventory": 50,
-    "safe_min": 30,
     "action_on": 70
 }

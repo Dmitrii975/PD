@@ -19,6 +19,21 @@ import os
 
 WAREHOUSES = []
 
+USER_ID = None
+UH = None
+
+def set_user_id(uid):
+    global USER_ID, UH
+
+    USER_ID = uid
+    UH = hash(str(uid))
+
+def get_user_id():
+    return USER_ID
+
+def get_hash():
+    return UH
+
 def add_warehouse(data):
     """Добавляет склад в глобальный список"""
     # Проверяем, нет ли уже склада с таким именем
@@ -36,15 +51,15 @@ def get_warehouses():
     return WAREHOUSES.copy()
 
 def read_warehouses():
-    if os.path.exists('.cache/warehouses.pickle'):
-        with open('.cache/warehouses.pickle', 'rb') as f:
+    if os.path.exists(f'.cache/{get_hash()}/warehouses.pickle'):
+        with open(f'.cache/{get_hash}/warehouses.pickle', 'rb') as f:
             data = pickle.load(f)
         for i in data:
             add_warehouse(i)
 
 def write_warehouses():
     wh = get_warehouses()
-    with open('.cache/warehouses.pickle', 'wb') as f:
+    with open(f'.cache/{get_hash}/warehouses.pickle', 'wb') as f:
         pickle.dump(wh, f)
 
 class LoginScreen(QWidget):
@@ -1713,7 +1728,10 @@ class MainApp(QMainWindow):
 
 if __name__ == "__main__":
 
-    get_calculated_vars()
+    set_user_id(-1)
+
+    vrs = get_calculated_vars(get_user_id())
+
     read_warehouses()
 
     app = QApplication(sys.argv)
