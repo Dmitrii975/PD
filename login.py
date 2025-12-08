@@ -1,2 +1,6 @@
+import os
+
 def login(email, password):
-    pass
+    hsh = hash(email + password)
+    if os.path.exists(f'.cache/{hsh}/'):
+        pass

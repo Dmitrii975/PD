@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                            QHBoxLayout, QPushButton, QStackedWidget, QFrame, QLabel,
                            QLineEdit, QSpacerItem, QSizePolicy, QScrollArea, QInputDialog, 
                            QDialog, QFormLayout, QFileDialog, QGridLayout, QComboBox, QDoubleSpinBox,
-                           QAbstractSpinBox)
+                           QAbstractSpinBox, QMessageBox)
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QFont, QPalette, QColor
 from server import *
@@ -12,8 +12,40 @@ from vars import *
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import numpy as np
+import pandas as pd
+from analys import calculate_metrics, make_plot
+import pickle
+import os
 
+WAREHOUSES = []
 
+def add_warehouse(data):
+    """Добавляет склад в глобальный список"""
+    # Проверяем, нет ли уже склада с таким именем
+    for i, existing in enumerate(WAREHOUSES):
+        if existing.get('name') == data.get('name'):
+            # Обновляем существующий
+            WAREHOUSES[i] = data
+            return
+    
+    # Добавляем новый
+    WAREHOUSES.append(data)
+
+def get_warehouses():
+    """Возвращает копию списка складов"""
+    return WAREHOUSES.copy()
+
+def read_warehouses():
+    if os.path.exists('.cache/warehouses.pickle'):
+        with open('.cache/warehouses.pickle', 'rb') as f:
+            data = pickle.load(f)
+        for i in data:
+            add_warehouse(i)
+
+def write_warehouses():
+    wh = get_warehouses()
+    with open('.cache/warehouses.pickle', 'wb') as f:
+        pickle.dump(wh, f)
 
 class LoginScreen(QWidget):
     def __init__(self, parent=None):
@@ -52,7 +84,7 @@ class LoginScreen(QWidget):
         self.email_input.setStyleSheet("""
             QLineEdit {
                 padding: 8px 15px;
-                border: 2px solid #ffbd8c;
+                border: 2px solid #ffd2a6;
                 border-radius: 8px;
                 font-size: 14px;
                 background-color: white;
@@ -74,7 +106,7 @@ class LoginScreen(QWidget):
         self.password_input.setStyleSheet("""
             QLineEdit {
                 padding: 8px 15px;
-                border: 2px solid #ffbd8c;
+                border: 2px solid #ffd2a6;
                 border-radius: 8px;
                 font-size: 14px;
                 background-color: white;
@@ -185,8 +217,11 @@ class LoginScreen(QWidget):
         
         # Сигналы
         login_btn.clicked.connect(parent.show_main_interface if parent else None)
+
         register_btn.clicked.connect(parent.show_register_screen if parent else None)
+
         skip_btn.clicked.connect(parent.show_main_interface if parent else None)
+        
         forgot_password.clicked.connect(self.show_forgot_password)
 
     def show_forgot_password(self):
@@ -230,7 +265,7 @@ class RegisterScreen(QWidget):
         self.email_input.setStyleSheet("""
             QLineEdit {
                 padding: 8px 15px;
-                border: 2px solid #ffbd8c;
+                border: 2px solid #ffd2a6;
                 border-radius: 8px;
                 font-size: 14px;
                 background-color: white;
@@ -252,7 +287,7 @@ class RegisterScreen(QWidget):
         self.password_input.setStyleSheet("""
             QLineEdit {
                 padding: 8px 15px;
-                border: 2px solid #ffbd8c;
+                border: 2px solid #ffd2a6;
                 border-radius: 8px;
                 font-size: 14px;
                 background-color: white;
@@ -275,7 +310,7 @@ class RegisterScreen(QWidget):
         self.confirm_input.setStyleSheet("""
             QLineEdit {
                 padding: 8px 15px;
-                border: 2px solid #ffbd8c;
+                border: 2px solid #ffd2a6;
                 border-radius: 8px;
                 font-size: 14px;
                 background-color: white;
@@ -389,7 +424,7 @@ class HomeScreen(QWidget):
         add_btn.setFixedHeight(35)
         add_btn.setStyleSheet("""
             QPushButton {
-                background-color: #ffbd8c;
+                background-color: #ffd2a6;
                 color: #5a3921;
                 border: none;
                 border-radius: 8px;
@@ -401,7 +436,7 @@ class HomeScreen(QWidget):
                 background-color: #ffa56a;
             }
         """)
-        add_btn.clicked.connect(self.get_data_for_item)
+        add_btn.clicked.connect(self.add_warehouse)
         header_layout.addWidget(add_btn)
         
         main_layout.addLayout(header_layout)
@@ -420,120 +455,62 @@ class HomeScreen(QWidget):
         self.scroll_area.setWidget(self.scroll_content)
         main_layout.addWidget(self.scroll_area)
         
-        # Изначально список пустой
-        self.warehouses = []
+        # Локальное хранилище виджетов
+        self.warehouse_widgets = {}  # {name: widget}
 
-    def add_warehouse(self):
-        """Открывает диалог для добавления нового склада"""
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Добавить склад")
-        dialog.setFixedSize(350, 200)
-        
-        main_layout = QVBoxLayout(dialog)
-        main_layout.setContentsMargins(15, 15, 15, 15)
-        
-        # Используем QGridLayout вместо QFormLayout для лучшего контроля
-        grid = QGridLayout()
-        grid.setSpacing(10)
-        
-        # Имя склада
-        name_label = QLabel("Имя склада:")
-        name_label.setStyleSheet("font-weight: normal;")
-        self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("Введите имя склада")
-        grid.addWidget(name_label, 0, 0)
-        grid.addWidget(self.name_input, 0, 1, 1, 2)  # Занимает 2 колонки
-        
-        # Файл данных
-        file_label = QLabel("Файл данных:")
-        file_label.setStyleSheet("font-weight: normal;")
-        self.file_path = QLineEdit()
-        self.file_path.setPlaceholderText("Выберите файл")
-        self.file_path.setReadOnly(True)
-        
-        browse_btn = QPushButton("Обзор...")
-        browse_btn.setFixedWidth(80)
-        browse_btn.clicked.connect(self.browse_file)
-        
-        grid.addWidget(file_label, 1, 0)
-        grid.addWidget(self.file_path, 1, 1)
-        grid.addWidget(browse_btn, 1, 2)
-        
-        main_layout.addLayout(grid)
-        
-        # Кнопки
-        button_layout = QHBoxLayout()
-        cancel_btn = QPushButton("Отмена")
-        cancel_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #e0e0e0;
-                border: none;
-                border-radius: 5px;
-                padding: 5px 15px;
-            }
-            QPushButton:hover {
-                background-color: #d0d0d0;
-            }
-        """)
-        cancel_btn.clicked.connect(dialog.reject)
-        
-        add_btn = QPushButton("Добавить")
-        add_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #27ae60;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                padding: 5px 15px;
-            }
-            QPushButton:hover {
-                background-color: #219955;
-            }
-        """)
-        add_btn.clicked.connect(lambda: self.add_item_with_data(
-            self.name_input.text().strip(),
-            self.file_path.text().strip()
-        ))
-        add_btn.clicked.connect(dialog.accept)
-        
-        button_layout.addStretch()
-        button_layout.addWidget(cancel_btn)
-        button_layout.addWidget(add_btn)
-        
-        main_layout.addLayout(button_layout)
-        
-        dialog.exec()
+    def showEvent(self, event):
+        """Вызывается при каждом показе экрана"""
+        super().showEvent(event)
+        self.refresh_warehouses()
 
-    def browse_file(self):
-        """Открывает проводник для выбора файла"""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, 
-            "Выберите файл", 
-            "", 
-            "CSV Files (*.csv);;Excel Files (*.xlsx);;All Files (*)"
-        )
-        if file_path:
-            self.file_path.setText(file_path)
-
-    def add_item_with_data(self, name, file_path, load_percentage=None, is_active=False, status_text=""):
-        """
-        Добавляет элемент в список складов с переданными данными
+    def refresh_warehouses(self):
+        """Обновляет список складов из глобальных данных"""
+        # Очищаем текущие виджеты
+        self.clear_warehouse_widgets()
         
-        Параметры:
-        - name: имя склада
-        - file_path: путь к файлу
-        - load_percentage: загруженность в процентах (опционально)
-        - is_active: активен ли склад (опционально)
-        - status_text: текст статуса (опционально)
-        """
-        if not name:
-            return
-            
+        # Загружаем склады из глобального списка
+        warehouses_data = get_warehouses()
+        
+        # Создаем виджеты для каждого склада
+        for warehouse_data in warehouses_data:
+            self.create_warehouse_widget(warehouse_data)
+        
+        print(f"Загружено {len(warehouses_data)} складов")
+
+    def clear_warehouse_widgets(self):
+        """Очищает все виджеты складов"""
+        # Удаляем все виджеты из layout
+        while self.scroll_layout.count():
+            item = self.scroll_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        # Очищаем локальный словарь
+        self.warehouse_widgets.clear()
+
+    def create_warehouse_widget(self, warehouse_data):
+        """Создает виджет для склада на основе данных"""
+        name = warehouse_data.get('name', 'Без названия')
+        file_path = warehouse_data.get('file_path', '')
+        
+        # ВЫЧИСЛЯЕМ СТАТУС ДИНАМИЧЕСКИ на основе текущих метрик
+        metrics = calculate_metrics(file_path)
+        load_percentage = metrics.get('cur_fullness')
+        status = metrics.get('status', False)  # Динамически вычисляем!
+        
+        # Определяем статус текст и цвет
+        if status:  # True = требуется действие
+            status_text = "Требуется действие!"
+            status_color = "#e74c3c"  # Красный
+        else:  # False = все ОК
+            status_text = "ОК"
+            status_color = "#27ae60"  # Зеленый
+        
         # Создаем элемент списка
         item = QWidget()
         item.setStyleSheet("""
             QWidget {
-                background-color: #ffbd8c;
+                background-color: #ffd2a6;
                 border-radius: 8px;
                 border: 1px solid #e67e22;
             }
@@ -576,53 +553,199 @@ class HomeScreen(QWidget):
         """)
         layout.addWidget(load_label)
         
-        # Растягиваемое пространство для прижатия статуса вправо
+        # Растягиваемое пространство
         layout.addStretch()
         
         # Статус (справа)
-        if status_text:
-            status_label = QLabel(status_text)
-            status_label.setStyleSheet("""
-                color: #e74c3c; 
-                font-weight: bold; 
-                font-size: 14px;
-                background: transparent;
-                border: none;
-                outline: none;
-            """)
-            layout.addWidget(status_label)
+        status_label = QLabel(status_text)
+        status_label.setStyleSheet(f"""
+            color: {status_color}; 
+            font-weight: bold; 
+            font-size: 14px;
+            background: transparent;
+            border: none;
+            outline: none;
+        """)
+        layout.addWidget(status_label)
         
         self.scroll_layout.addWidget(item)
         
-        # Сохраняем данные склада
-        warehouse = {
-            "name": name,
-            "file_path": file_path,
-            "item": item,
-            "status_label": status_label if status_text else None,
-            "load_label": load_label,
-            "is_active": is_active
-        }
-        self.warehouses.append(warehouse)
-        return warehouse
-
-    def get_data_for_item(self):
-        """Заглушка для получения данных (будет заменена на реальную логику)"""
-        import random
-        # Генерируем рандомные данные для тестирования
-        name = f"Склад-{random.randint(1, 100)}"
-        load = random.randint(0, 100)
-        is_active = random.choice([True, False])
-        status = "Требуется действие!" if is_active else ""
+        # Сохраняем связь между данными и виджетом
+        item.warehouse_data = warehouse_data
         
-        # Добавляем новый элемент с рандомными данными
-        self.add_item_with_data(
-            name=name,
-            file_path="",
-            load_percentage=load,
-            is_active=is_active,
-            status_text=status
-        )
+        # Сохраняем в локальный словарь
+        self.warehouse_widgets[name] = item
+        
+        return item
+
+    def add_warehouse(self):
+        """Открывает диалог для добавления нового склада"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Добавить склад")
+        dialog.setFixedSize(350, 200)
+        
+        main_layout = QVBoxLayout(dialog)
+        main_layout.setContentsMargins(15, 15, 15, 15)
+        
+        grid = QGridLayout()
+        grid.setSpacing(10)
+        
+        # Имя склада
+        name_label = QLabel("Имя склада:")
+        name_label.setStyleSheet("font-weight: normal;")
+        name_input = QLineEdit()
+        name_input.setPlaceholderText("Введите имя склада")
+        grid.addWidget(name_label, 0, 0)
+        grid.addWidget(name_input, 0, 1, 1, 2)
+        
+        # Файл данных
+        file_label = QLabel("Файл данных:")
+        file_label.setStyleSheet("font-weight: normal;")
+        file_path_input = QLineEdit()
+        file_path_input.setPlaceholderText("Выберите файл")
+        file_path_input.setReadOnly(True)
+        
+        browse_btn = QPushButton("Обзор...")
+        browse_btn.setFixedWidth(80)
+        
+        def browse_file():
+            file_path, _ = QFileDialog.getOpenFileName(
+                self, 
+                "Выберите файл", 
+                "", 
+                "CSV Files (*.csv)"
+            )
+            if file_path:
+                file_path_input.setText(file_path)
+        
+        browse_btn.clicked.connect(browse_file)
+        
+        grid.addWidget(file_label, 1, 0)
+        grid.addWidget(file_path_input, 1, 1)
+        grid.addWidget(browse_btn, 1, 2)
+        
+        main_layout.addLayout(grid)
+        
+        # Кнопки
+        button_layout = QHBoxLayout()
+        cancel_btn = QPushButton("Отмена")
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+                padding: 5px 15px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+        """)
+        cancel_btn.clicked.connect(dialog.reject)
+        
+        add_btn = QPushButton("Добавить")
+        add_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                padding: 5px 15px;
+            }
+            QPushButton:hover {
+                background-color: #219955;
+            }
+        """)
+        
+        def add_and_close():
+            name = name_input.text().strip()
+            pth = file_path_input.text().strip()
+            
+            if not name:
+                QMessageBox.warning(self, "Ошибка", "Введите имя склада")
+                return
+                
+            if not pth:
+                QMessageBox.warning(self, "Ошибка", "Выберите файл")
+                return
+            
+            # Проверяем, нет ли уже склада с таким именем
+            existing_warehouses = get_warehouses()
+            for existing in existing_warehouses:
+                if existing.get('name') == name:
+                    QMessageBox.warning(self, "Ошибка", f"Склад с именем '{name}' уже существует")
+                    return
+            
+            try:
+                # Формируем данные склада (ТОЛЬКО ОСНОВНЫЕ ДАННЫЕ!)
+                warehouse_data = {
+                    "name": name,
+                    "file_path": pth
+                    # НЕ сохраняем статус, он вычисляется динамически!
+                    # НЕ сохраняем метрики, они вычисляются при каждом обновлении!
+                }
+                
+                print(f"Добавлен склад '{name}'")
+                
+                # Добавляем в глобальный список
+                add_warehouse(warehouse_data)
+                
+                # Создаем виджет (он сам вычислит статус)
+                self.create_warehouse_widget(warehouse_data)
+                
+                dialog.accept()
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Ошибка", f"Не удалось обработать файл:\n{str(e)}")
+                import traceback
+                traceback.print_exc()
+        
+        add_btn.clicked.connect(add_and_close)
+        
+        button_layout.addStretch()
+        button_layout.addWidget(cancel_btn)
+        button_layout.addWidget(add_btn)
+        
+        main_layout.addLayout(button_layout)
+        
+        dialog.exec()
+
+    def update_all_warehouses_status(self):
+        """Обновляет статусы всех складов (например, при изменении настроек)"""
+        for name, widget in self.warehouse_widgets.items():
+            warehouse_data = widget.warehouse_data
+            file_path = warehouse_data.get('file_path')
+            
+            if file_path:
+                # Пересчитываем метрики
+                metrics = calculate_metrics(file_path)
+                status = metrics.get('status', False)
+                
+                # Находим статус лейбл
+                for child in widget.findChildren(QLabel):
+                    if child.text() in ["Требуется действие!", "ОК"]:
+                        # Обновляем текст и цвет
+                        if status:
+                            child.setText("Требуется действие!")
+                            child.setStyleSheet("""
+                                color: #e74c3c; 
+                                font-weight: bold; 
+                                font-size: 14px;
+                                background: transparent;
+                                border: none;
+                                outline: none;
+                            """)
+                        else:
+                            child.setText("ОК")
+                            child.setStyleSheet("""
+                                color: #27ae60; 
+                                font-weight: bold; 
+                                font-size: 14px;
+                                background: transparent;
+                                border: none;
+                                outline: none;
+                            """)
+                        break
+
 
 class AnalysisScreen(QWidget):
     def __init__(self):
@@ -656,26 +779,26 @@ class AnalysisScreen(QWidget):
             QComboBox QAbstractItemView {
                 background-color: white;
                 border: 1px solid #e67e22;
-                selection-background-color: #ffbd8c;
+                selection-background-color: #ffd2a6;
             }
         """)
-        self.warehouse_items = [f"Склад {i}" for i in range(1, 6)]  # можно заменить на реальные данные
         
-        # Добавляем "Выберите склад" только если есть склады
-        if self.warehouse_items:
-            self.warehouse_combo.addItems(["Выберите склад"] + self.warehouse_items)
-        else:
-            self.warehouse_combo.addItem("Нет складов")
-            self.warehouse_combo.setEnabled(False)
+        # ИНИЦИАЛИЗИРУЕМ ПУСТЫЕ ДАННЫЕ
+        self.warehouse_items = []
+        self.warehouse_data = []
+        
+        # ДОБАВЛЯЕМ ПУСТОЙ КОМБОБОКС С ЗАГЛУШКОЙ
+        self.warehouse_combo.addItem("Загрузка складов...")
+        self.warehouse_combo.setEnabled(False)
 
         self.warehouse_combo.currentIndexChanged.connect(self.update_data)
         main_layout.addWidget(self.warehouse_combo)
         
-        # Контейнер для графика
+        # Контейнер для графика (СОЗДАЕМ ВСЕГДА)
         self.graph_container = QFrame()
         self.graph_container.setStyleSheet("""
             QFrame {
-                background-color: #ffbd8c;
+                background-color: #ffd2a6;
                 border-radius: 10px;
                 margin: 10px;
                 padding: 10px;
@@ -684,18 +807,18 @@ class AnalysisScreen(QWidget):
         self.graph_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         graph_layout = QVBoxLayout(self.graph_container)
         
-        # График
+        # График (СОЗДАЕМ ВСЕГДА)
         self.figure = Figure(figsize=(5, 4), dpi=100)
         self.canvas = FigureCanvas(self.figure)
-        self.canvas.setStyleSheet("background-color: #ffbd8c; border-radius: 8px;")
+        self.canvas.setStyleSheet("background-color: #ffd2a6; border-radius: 8px;")
         self.canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         graph_layout.addWidget(self.canvas)
         
-        # Статистика
+        # Статистика (СОЗДАЕМ ВСЕГДА)
         self.stats_container = QFrame()
         self.stats_container.setStyleSheet("""
             QFrame {
-                background-color: #ffbd8c;
+                background-color: #ffd2a6;
                 border-radius: 10px;
                 margin: 10px;
                 padding: 8px;
@@ -709,9 +832,9 @@ class AnalysisScreen(QWidget):
         self.stats_blocks = []
         stats_items = [
             ("Загруженность", ""),
-            ("Товары на складе", ""),
-            ("Свободное место", ""),
-            ("Последняя проверка", "")
+            ("Средняя загруженность", ""),
+            ("Средние продажи", ""),
+            ("Дней с излишками", ""),
         ]
         
         for i, (label, _) in enumerate(stats_items):
@@ -745,16 +868,144 @@ class AnalysisScreen(QWidget):
         
         stats_layout.addWidget(QLabel(), 2, 0, 1, 2)
         
-        # Добавляем виджеты в макет только если есть склады
+        # ВАЖНО: ДОБАВЛЯЕМ ВСЕ ВИДЖЕТЫ В МАКЕТ СРАЗУ
+        # (они будут скрыты/показаны позже)
+        main_layout.addWidget(self.graph_container, 4)
+        main_layout.addWidget(self.stats_container, 1)
+        
+        # ИНИЦИАЛИЗИРУЕМ ПУСТОЙ ГРАФИК
+        self.initialize_empty_graph()
+        
+        # НЕ вызываем update_data() здесь - будет вызван в showEvent()
+        # self.update_data()  # <-- УБРАТЬ
+        
+        # Изначально скрываем график и статистику
+        self.graph_container.hide()
+        self.stats_container.hide()
+
+    def showEvent(self, event):
+        """Вызывается при каждом показе виджета"""
+        super().showEvent(event)
+        self.refresh_warehouses()  # Теперь здесь будет и обновление данных
+        
+    def refresh_warehouses(self):
+        """Обновляет список складов"""
+        # Получаем актуальный список складов
+        raw_data = get_warehouses()
+        
+        # Сохраняем оригинальные данные
+        self.warehouse_data = raw_data
+        
+        # Извлекаем названия складов
+        self.warehouse_items = []
+        for item in raw_data:
+            if isinstance(item, dict):
+                name = item.get('name', item.get('warehouse_name', 
+                          item.get('title', 'Без названия')))
+                self.warehouse_items.append(name)
+            elif isinstance(item, str):
+                self.warehouse_items.append(item)
+            else:
+                self.warehouse_items.append(str(item))
+        
+        # Сохраняем текущий выбранный склад (если был)
+        current_text = self.warehouse_combo.currentText()
+        
+        # Блокируем сигналы чтобы не вызывать update_data при очистке
+        self.warehouse_combo.blockSignals(True)
+        
+        # Очищаем комбобокс
+        self.warehouse_combo.clear()
+        
+        # Добавляем новые элементы
         if self.warehouse_items:
-            main_layout.addWidget(self.graph_container, 4)
-            main_layout.addWidget(self.stats_container, 1)
-            # Выбираем первый склад по умолчанию (индекс 1, т.к. "Выберите склад" на 0)
-            self.warehouse_combo.setCurrentIndex(1)
+            self.warehouse_combo.addItems(["Выберите склад"] + self.warehouse_items)
+            self.warehouse_combo.setEnabled(True)
+            
+            # Разблокируем сигналы
+            self.warehouse_combo.blockSignals(False)
+            
+            # Восстанавливаем предыдущий выбор
+            if current_text in self.warehouse_items and current_text != "Загрузка складов...":
+                index = self.warehouse_combo.findText(current_text)
+                self.warehouse_combo.setCurrentIndex(index)
+            else:
+                # Иначе выбираем первый склад
+                self.warehouse_combo.setCurrentIndex(1)
+                
+            # ПОКАЗЫВАЕМ график и статистику
+            self.graph_container.show()
+            self.stats_container.show()
+            
+            # ОБНОВЛЯЕМ ДАННЫЕ ДЛЯ ВЫБРАННОГО СКЛАДА
             self.update_data()
         else:
-            # Если складов нет — не добавляем график и статистику
-            pass
+            self.warehouse_combo.addItem("Нет складов")
+            self.warehouse_combo.setEnabled(False)
+            
+            # Разблокируем сигналы
+            self.warehouse_combo.blockSignals(False)
+            
+            # Скрываем график и статистику
+            self.graph_container.hide()
+            self.stats_container.hide()
+            
+            # Очищаем данные
+            self.clear_data_display()
+    
+    def initialize_empty_graph(self):
+        """Инициализирует пустой график"""
+        self.figure.clear()
+        ax = self.figure.add_subplot(111)
+        ax.text(0.5, 0.5, 'Выберите склад для отображения данных', 
+                horizontalalignment='center', verticalalignment='center',
+                transform=ax.transAxes, fontsize=12, color='#5a3921')
+        ax.set_facecolor('#ffd2a6')
+        self.figure.patch.set_facecolor('#ffd2a6')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        ax.spines['bottom'].set_visible(False)
+        self.canvas.draw()
+    
+    def clear_data_display(self):
+        """Очищает отображение данных"""
+        for _, _, value_widget in self.stats_blocks:
+            value_widget.setText("--")
+        self.initialize_empty_graph()
+
+    def update_data(self):
+        """Обновляет график и статистику для выбранного склада"""
+        index = self.warehouse_combo.currentIndex()
+        
+        # Если выбрана "заглушка" или список пуст — очищаем данные
+        if index == 0 or not self.warehouse_items:
+            self.clear_data_display()
+            return
+        
+        # Получаем данные выбранного склада
+        warehouse_index = index - 1  # индекс в warehouse_items
+        
+        # Заполняем статистику
+        warehouse_info = self.warehouse_data[warehouse_index]
+        # Используйте реальные данные из warehouse_info
+        metrics = calculate_metrics(warehouse_info['file_path'])
+        stats_data = {
+            "Загруженность": f"{metrics['cur_fullness']}%",
+            "Средняя загруженность": f"{metrics['avg_fullness']}%.",
+            "Средние продажи": f"{metrics['avg_salles']} е.т.",
+            "Дней с излишками": f"{metrics['days_with_over']}%",
+        }
+        
+        for block, label_widget, value_widget in self.stats_blocks:
+            key = label_widget.text()
+            if key in stats_data:
+                value_widget.setText(stats_data[key])
+        
+        # Отрисовываем график
+        make_plot(warehouse_info['file_path'], self.figure, self.canvas)
 
     def plot_sine_wave(self):
         """Создает график синусоиды"""
@@ -775,8 +1026,8 @@ class AnalysisScreen(QWidget):
         ax.grid(False)
         
         # Полностью персиковый фон графика
-        ax.set_facecolor('#ffbd8c')
-        self.figure.patch.set_facecolor('#ffbd8c')
+        ax.set_facecolor('#ffd2a6')
+        self.figure.patch.set_facecolor('#ffd2a6')
         
         ax.set_yticks([0, 250, 500, 750, 1000])
         ax.set_xticks(np.linspace(0, 2 * np.pi, 10))
@@ -791,33 +1042,41 @@ class AnalysisScreen(QWidget):
         # Обновляем холст
         self.canvas.draw()
 
-    def update_data(self):
-        index = self.warehouse_combo.currentIndex()
+
+    def plot_sine_wave(self):
+        """Создает график синусоиды"""
+        self.figure.clear()
+        ax = self.figure.add_subplot(111)
         
-        # Если выбрана "заглушка" или список пуст — скрываем данные
-        if index == 0 or not self.warehouse_items:
-            for _, _, value_widget in self.stats_blocks:
-                value_widget.setText("--")
-            # Опционально: очистить график
-            self.figure.clear()
-            self.canvas.draw()
-            return
+        # Настройка отступов графика
+        self.figure.subplots_adjust(left=0.08, right=0.95, top=0.85, bottom=0.15)
         
-        # Реальные данные для склада
-        warehouse_index = index - 1  # индекс в warehouse_items
-        stats_data = {
-            "Загруженность": f"{70 + warehouse_index * 5}%",
-            "Товары на складе": f"{1000 + warehouse_index * 100} шт.",
-            "Свободное место": f"{30 - warehouse_index * 5}%",
-            "Последняя проверка": "15.12.2025"
-        }
+        # Генерация данных
+        x = np.linspace(0, 2 * np.pi, 100)
+        y = np.sin(x) * 500 + 500  # Нормализуем для диапазона 0-1000
         
-        for block, label_widget, value_widget in self.stats_blocks:
-            key = label_widget.text()
-            if key in stats_data:
-                value_widget.setText(stats_data[key])
+        # Настройка графика
+        ax.plot(x, y, 'o-', color='#e67e22', linewidth=2, markersize=6)
+        ax.set_xlabel('Время', fontsize=12, color='#5a3921')
+        ax.set_ylabel('Единицы', fontsize=12, color='#5a3921')
+        ax.grid(False)
         
-        self.plot_sine_wave()
+        # Полностью персиковый фон графика
+        ax.set_facecolor('#ffd2a6')
+        self.figure.patch.set_facecolor('#ffd2a6')
+        
+        ax.set_yticks([0, 250, 500, 750, 1000])
+        ax.set_xticks(np.linspace(0, 2 * np.pi, 10))
+        ax.set_xticklabels([f"{i:.1f}" for i in np.linspace(0, 2 * np.pi, 10)])
+        
+        # Стилизация осей
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_color('#e67e22')
+        ax.spines['bottom'].set_color('#e67e22')
+        
+        # Обновляем холст
+        self.canvas.draw()
 
 class Wall(QWidget):
     def __init__(self):
@@ -849,14 +1108,14 @@ class Wall(QWidget):
         
         # Данные объявлений
         announcements = [
-            ["Компания 1", "50", "3 дня"],
-            ["Компания 2", "200", "5 дней"],
-            ["Склад-партнер", "150", "2 дня"],
-            ["Логистик-Хаб", "300", "7 дней"],
-            ["Доп. Компания", "75", "1 день"],
-            ["Еще одна", "250", "4 дня"],
-            ["Тестовая", "100", "6 дней"],
-            ["Пример", "400", "2 дня"]
+            ["Компания 1", "50", "3"],
+            ["Компания 2", "200", "5"],
+            ["Склад-партнер", "150", "2"],
+            ["Логистик-Хаб", "300", "7"],
+            ["Доп. Компания", "75", "1"],
+            ["Еще одна", "250", "4"],
+            ["Тестовая", "100", "6"],
+            ["Пример", "400", "2"]
         ]
         
         # Создание блоков объявлений
@@ -864,7 +1123,7 @@ class Wall(QWidget):
             block = QWidget()
             block.setStyleSheet("""
                 QWidget {
-                    background-color: #ffbd8c;
+                    background-color: #ffd2a6;
                     border-radius: 8px;
                     margin: 5px;
                 }
@@ -960,7 +1219,7 @@ class SettingsScreen(QWidget):
             setting_container = QFrame()
             setting_container.setStyleSheet("""
                 QFrame {
-                    background-color: #ffbd8c;
+                    background-color: #ffd2a6;
                     border-radius: 8px;
                     margin: 3px;
                     padding: 8px;
@@ -1055,7 +1314,7 @@ class AccountScreen(QWidget):
         form_container = QFrame()
         form_container.setStyleSheet("""
             QFrame {
-                background-color: #ffbd8c;
+                background-color: #ffd2a6;
                 border-radius: 10px;
                 margin: 15px;
                 padding: 20px;
@@ -1269,7 +1528,7 @@ class MainInterface(QWidget):
         
         # ====== Боковое меню ======
         sidebar = QFrame()
-        sidebar.setStyleSheet("background-color: #ffbd8c;")  # Персиковый фон как в ТЗ
+        sidebar.setStyleSheet("background-color: #ffd2a6;")  # Персиковый фон как в ТЗ
         sidebar.setFixedWidth(250)
         
         sidebar_layout = QVBoxLayout(sidebar)
@@ -1454,9 +1713,8 @@ class MainApp(QMainWindow):
 
 if __name__ == "__main__":
 
-    get_warehouses_list()
-    check_data_loaded()
-    get_ob()
+    get_calculated_vars()
+    read_warehouses()
 
     app = QApplication(sys.argv)
     
@@ -1464,6 +1722,8 @@ if __name__ == "__main__":
     font = QFont("Segoe UI", 11)
     app.setFont(font)
     
+    app.aboutToQuit.connect(write_warehouses)
+
     window = MainApp()
     window.show()
     sys.exit(app.exec())
