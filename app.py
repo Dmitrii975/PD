@@ -423,6 +423,19 @@ class RegisterScreen(QWidget):
         login_btn.clicked.connect(parent.show_login_screen if parent else None)
         skip_btn.clicked.connect(parent.show_main_interface if parent else None)
 
+    def check_limits(self):
+        "проверка ограничений регистрации"
+        password = self.password_input.text()
+        mail = self.email_input.text()
+        if len(password) < 8:
+            return False
+        if '@' not in mail or '.' not in mail:
+            return False
+        elif mail == "1" and password == "1": #для тестирования
+            return True
+        else:
+            return False
+
 class HomeScreen(QWidget):
     def __init__(self):
         super().__init__()
