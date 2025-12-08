@@ -1493,9 +1493,9 @@ class AccountScreen(QWidget):
         clear_data_btn = QPushButton("Очистить данные")
         clear_data_btn.setStyleSheet("""
             QPushButton {
-                background-color: #f0f0f0;
-                color: #e67e22;
-                border: 1px solid #e0e0e0;
+                background-color: #e0e0e0;
+                color: #5a3921;
+                border: 1px solid #c0c0c0;
                 border-radius: 5px;
                 padding: 12px 20px;
                 font-weight: bold;
@@ -1503,8 +1503,7 @@ class AccountScreen(QWidget):
                 min-width: 140px;
             }
             QPushButton:hover {
-                background-color: #e0e0e0;
-                color: #d35400;
+                background-color: #d0d0d0;
             }
         """)
         
