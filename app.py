@@ -67,13 +67,12 @@ def write_warehouses():
 class LoginScreen(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.main_app = parent  # Сохраняем ссылку на MainApp
         self.setStyleSheet("background-color: #f8f4e9;")
-        
         # Главный layout для центрирования
         main_layout = QVBoxLayout()
         main_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        
         # Контейнер для формы
         form_container = QFrame()
         form_container.setStyleSheet("""
@@ -84,16 +83,13 @@ class LoginScreen(QWidget):
             }
         """)
         form_container.setFixedWidth(400)  # Фиксированная ширина для оптимального размера
-        
         form_layout = QVBoxLayout(form_container)
         form_layout.setSpacing(20)
         form_layout.setContentsMargins(20, 20, 20, 20)
-        
         # Заголовок
         title = QLabel("Вход в аккаунт")
         title.setStyleSheet("font-size: 24px; font-weight: bold; color: #5a3921;")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
         # Поля ввода с placeholder вместо лейблов
         self.email_input = QLineEdit()
         self.email_input.setFixedHeight(45)
@@ -116,7 +112,6 @@ class LoginScreen(QWidget):
                 font-style: italic;
             }
         """)
-        
         self.password_input = QLineEdit()
         self.password_input.setFixedHeight(45)
         self.password_input.setPlaceholderText("Пароль")
@@ -139,7 +134,6 @@ class LoginScreen(QWidget):
             }
         """)
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
-        
         # Забыли пароль?
         forgot_password = QPushButton("Забыли пароль?")
         forgot_password.setStyleSheet("""
@@ -157,7 +151,6 @@ class LoginScreen(QWidget):
             }
         """)
         forgot_password.setCursor(Qt.CursorShape.PointingHandCursor)
-        
         # Кнопка входа
         login_btn = QPushButton("Войти")
         login_btn.setFixedHeight(48)
@@ -178,11 +171,9 @@ class LoginScreen(QWidget):
             }
         """)
         login_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        
-        # Кнопки переключения
+        # Кнопка переключения на регистрацию
         button_container = QHBoxLayout()
         button_container.setContentsMargins(0, 0, 0, 0)
-        
         register_btn = QPushButton("Регистрация")
         register_btn.setStyleSheet("""
             QPushButton {
@@ -197,30 +188,8 @@ class LoginScreen(QWidget):
             }
         """)
         register_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        
-        separator = QLabel("•")
-        separator.setStyleSheet("color: #bdc3c7; font-size: 16px;")
-        
-        skip_btn = QPushButton("Пропустить")
-        skip_btn.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                color: #7f8c8d;
-                border: none;
-                font-size: 14px;
-                text-decoration: underline;
-            }
-            QPushButton:hover {
-                color: #e74c3c;
-            }
-        """)
-        skip_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        
         button_container.addWidget(register_btn)
-        button_container.addWidget(separator)
-        button_container.addWidget(skip_btn)
         button_container.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
         # Сборка интерфейса
         form_layout.addWidget(title)
         form_layout.addWidget(self.email_input)
@@ -228,19 +197,69 @@ class LoginScreen(QWidget):
         form_layout.addWidget(forgot_password, alignment=Qt.AlignmentFlag.AlignRight)
         form_layout.addWidget(login_btn)
         form_layout.addLayout(button_container)
-        
         main_layout.addWidget(form_container, alignment=Qt.AlignmentFlag.AlignCenter)
         self.setLayout(main_layout)
-        
-        # Сигналы
-        login_btn.clicked.connect(parent.show_main_interface if parent else None)
-
-        register_btn.clicked.connect(parent.show_register_screen if parent else None)
-
-        skip_btn.clicked.connect(parent.show_main_interface if parent else None)
-        
+        # Сигналы - используем сохраненную ссылку на main_app
+        login_btn.clicked.connect(self.handle_login)
+        register_btn.clicked.connect(self.main_app.show_register_screen if self.main_app else None)
         forgot_password.clicked.connect(self.show_forgot_password)
+    
+    # Новый метод обработки входа
+    def handle_login(self):
+        """Обработчик нажатия кнопки входа с валидацией"""
+        if self.validate_input():
+            # Все данные корректны — переходим в основной интерфейс
+            if self.main_app:
+                self.main_app.show_main_interface()
+    
+    def validate_input(self) -> bool:
+        """Проверка корректности введенных данных"""
+        email = self.email_input.text().strip()
+        password = self.password_input.text()
+        
+        # Специальное исключение для отладки: если во все поля введена "1"
+        if email == "1" and password == "1":
+            return True
+            
+        # Проверка email
+        if not email:
+            self.show_error("Поле email обязательно для заполнения")
+            return False
+        if '@' not in email or '.' not in email.split('@')[-1]:
+            self.show_error("Некорректный формат email адреса")
+            return False
+            
+        # Проверка пароля
+        if len(password) < 8:
+            self.show_error("Пароль должен содержать минимум 8 символов")
+            return False
+            
+        return True
 
+    def show_error(self, message: str):
+        """Унифицированное отображение ошибок"""
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Icon.Warning)
+        msg.setWindowTitle("Ошибка входа")
+        msg.setText(message)
+        msg.setStyleSheet("""
+            QMessageBox {
+                background-color: #fffaf0;
+                font-family: Arial;
+            }
+            QLabel {
+                color: #5a3921;
+                font-size: 14px;
+            }
+            QPushButton {
+                background-color: #e67e22;
+                color: white;
+                border-radius: 4px;
+                padding: 5px 15px;
+            }
+        """)
+        msg.exec()
+    
     def show_forgot_password(self):
         """Заглушка для функции восстановления пароля"""
         print("Восстановление пароля")
@@ -248,13 +267,12 @@ class LoginScreen(QWidget):
 class RegisterScreen(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.main_app = parent  # Сохраняем ссылку на MainApp
         self.setStyleSheet("background-color: #f8f4e9;")
-        
         # Главный layout для центрирования
         main_layout = QVBoxLayout()
         main_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        
         # Контейнер для формы
         form_container = QFrame()
         form_container.setStyleSheet("""
@@ -265,16 +283,13 @@ class RegisterScreen(QWidget):
             }
         """)
         form_container.setFixedWidth(400)  # Фиксированная ширина для оптимального размера
-        
         form_layout = QVBoxLayout(form_container)
         form_layout.setSpacing(20)
         form_layout.setContentsMargins(20, 20, 20, 20)
-        
         # Заголовок
         title = QLabel("Регистрация")
         title.setStyleSheet("font-size: 24px; font-weight: bold; color: #5a3921;")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
         # Поля ввода с placeholder вместо лейблов
         self.email_input = QLineEdit()
         self.email_input.setFixedHeight(45)
@@ -297,7 +312,6 @@ class RegisterScreen(QWidget):
                 font-style: italic;
             }
         """)
-        
         self.password_input = QLineEdit()
         self.password_input.setFixedHeight(45)
         self.password_input.setPlaceholderText("Пароль (минимум 8 символов)")
@@ -320,11 +334,11 @@ class RegisterScreen(QWidget):
             }
         """)
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
-        
-        self.confirm_input = QLineEdit()
-        self.confirm_input.setFixedHeight(45)
-        self.confirm_input.setPlaceholderText("Подтвердите пароль")
-        self.confirm_input.setStyleSheet("""
+        # Поле для имени компании (вместо подтверждения пароля)
+        self.company_input = QLineEdit()
+        self.company_input.setFixedHeight(45)
+        self.company_input.setPlaceholderText("Название компании")
+        self.company_input.setStyleSheet("""
             QLineEdit {
                 padding: 8px 15px;
                 border: 2px solid #ffd2a6;
@@ -342,8 +356,6 @@ class RegisterScreen(QWidget):
                 font-style: italic;
             }
         """)
-        self.confirm_input.setEchoMode(QLineEdit.EchoMode.Password)
-        
         # Кнопка регистрации
         register_btn = QPushButton("Зарегистрироваться")
         register_btn.setFixedHeight(48)
@@ -364,11 +376,9 @@ class RegisterScreen(QWidget):
             }
         """)
         register_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        
-        # Кнопки переключения
+        # Кнопка переключения на вход
         button_container = QHBoxLayout()
         button_container.setContentsMargins(0, 0, 0, 0)
-        
         login_btn = QPushButton("Вход")
         login_btn.setStyleSheet("""
             QPushButton {
@@ -383,58 +393,82 @@ class RegisterScreen(QWidget):
             }
         """)
         login_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        
-        separator = QLabel("•")
-        separator.setStyleSheet("color: #bdc3c7; font-size: 16px;")
-        
-        skip_btn = QPushButton("Пропустить")
-        skip_btn.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                color: #7f8c8d;
-                border: none;
-                font-size: 14px;
-                text-decoration: underline;
-            }
-            QPushButton:hover {
-                color: #e74c3c;
-            }
-        """)
-        skip_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        
         button_container.addWidget(login_btn)
-        button_container.addWidget(separator)
-        button_container.addWidget(skip_btn)
         button_container.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
         # Сборка интерфейса
         form_layout.addWidget(title)
         form_layout.addWidget(self.email_input)
         form_layout.addWidget(self.password_input)
-        form_layout.addWidget(self.confirm_input)
+        form_layout.addWidget(self.company_input)  # Поле для названия компании
         form_layout.addWidget(register_btn)
         form_layout.addLayout(button_container)
-        
         main_layout.addWidget(form_container, alignment=Qt.AlignmentFlag.AlignCenter)
         self.setLayout(main_layout)
-        
-        # Сигналы
-        register_btn.clicked.connect(parent.show_main_interface if parent else None)
-        login_btn.clicked.connect(parent.show_login_screen if parent else None)
-        skip_btn.clicked.connect(parent.show_main_interface if parent else None)
-
-    def check_limits(self):
-        "проверка ограничений регистрации"
+        # Сигналы - используем сохраненную ссылку на main_app
+        register_btn.clicked.connect(self.handle_registration)
+        login_btn.clicked.connect(self.main_app.show_login_screen if self.main_app else None)
+    
+    def handle_registration(self):
+        """Обработчик нажатия кнопки регистрации с валидацией"""
+        if self.validate_input():
+            # Все данные корректны — переходим в основной интерфейс
+            if self.main_app:
+                self.main_app.show_main_interface()
+    
+    def validate_input(self) -> bool:
+        """Проверка корректности введенных данных"""
+        email = self.email_input.text().strip()
         password = self.password_input.text()
-        mail = self.email_input.text()
-        if len(password) < 8:
-            return False
-        if '@' not in mail or '.' not in mail:
-            return False
-        elif mail == "1" and password == "1": #для тестирования
+        company_name = self.company_input.text().strip()
+        
+        # Специальное исключение для отладки: если во все поля введена "1"
+        if email == "1" and password == "1" and company_name == "1":
             return True
-        else:
+        
+        # Проверка email
+        if not email:
+            self.show_error("Поле email обязательно для заполнения")
             return False
+        if '@' not in email or '.' not in email.split('@')[-1]:
+            self.show_error("Некорректный формат email адреса")
+            return False
+            
+        # Проверка пароля
+        if len(password) < 8:
+            self.show_error("Пароль должен содержать минимум 8 символов")
+            return False
+            
+        # Проверка названия компании
+        if not company_name:
+            self.show_error("Название компании обязательно для заполнения")
+            return False
+        
+        return True
+
+    def show_error(self, message: str):
+        """Унифицированное отображение ошибок"""
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Icon.Warning)
+        msg.setWindowTitle("Ошибка регистрации")
+        msg.setText(message)
+        msg.setStyleSheet("""
+            QMessageBox {
+                background-color: #fffaf0;
+                font-family: Arial;
+            }
+            QLabel {
+                color: #5a3921;
+                font-size: 14px;
+            }
+            QPushButton {
+                background-color: #e67e22;
+                color: white;
+                border-radius: 4px;
+                padding: 5px 15px;
+            }
+        """)
+        msg.exec()
+        
 
 class HomeScreen(QWidget):
     def __init__(self):
