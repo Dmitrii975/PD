@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                            QHBoxLayout, QPushButton, QStackedWidget, QFrame, QLabel,
                            QLineEdit, QSpacerItem, QSizePolicy, QScrollArea, QInputDialog, 
                            QDialog, QFormLayout, QFileDialog, QGridLayout, QComboBox, QDoubleSpinBox,
-                           QAbstractSpinBox, QMessageBox, QListView)
+                           QAbstractSpinBox, QMessageBox, QListView, QSpinBox)
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QFont, QPalette, QColor, QPixmap, QIntValidator
 from server import *
@@ -13,7 +13,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import numpy as np
 import pandas as pd
-from analys import calculate_metrics, make_plot, read_analys_data, write_analys_data, get_end, set_end, get_start
+from analys import calculate_metrics, make_plot, read_analys_data, write_analys_data, get_end, set_end, get_start, set_start
 import pickle
 import os
 import hashlib
@@ -1482,7 +1482,17 @@ class Wall(QWidget):
         
         scroll_area.setWidget(container)
 
+
 class SettingsScreen(QWidget):
+    # Значения по умолчанию для настроек
+    DEFAULT_SETTINGS = {
+        "TARGET_INVENTORY": 50,
+        "MAX_SAFE": 70,
+        "START": 2,
+        "END": 40,
+        "MIN_SAFE": 30
+    }
+    
     def __init__(self):
         super().__init__()
         self.setStyleSheet("background-color: #fffaf0; border-radius: 15px;")
@@ -1496,17 +1506,23 @@ class SettingsScreen(QWidget):
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(title)
         
-        # Данные настроек
+        # Загружаем настройки из файла или используем значения по умолчанию
+        self.current_settings = self._load_settings()
+        
+        # Список настроек с переводами
         settings_list = [
-            ["Максимальная загрузка склада", 85.5],
-            ["Порог уведомления", 90.0],
-            ["Частота обновления данных (мин)", 5.0],
-            ["Минимальное свободное место", 10.0],
-            ["Срок хранения данных (дней)", 30.0]
+            ["TARGET_INVENTORY", "Целевой запас"],
+            ["MAX_SAFE", "Максимальный безопасный запас"],
+            ["START", "Начальный день"],
+            ["END", "Конечный день"],
+            ["MIN_SAFE", "Минимальный безопасный запас"]
         ]
         
+        # Словарь для хранения полей ввода
+        self.spinboxes = {}
+        
         # Создание блоков настроек
-        for name, value in settings_list:
+        for key, name in settings_list:
             setting_container = QFrame()
             setting_container.setStyleSheet("""
                 QFrame {
@@ -1526,13 +1542,17 @@ class SettingsScreen(QWidget):
             label.setFixedWidth(220)
             
             # Поле ввода числа (без кнопок-спиннеров)
-            spinbox = QDoubleSpinBox()
+            if key in ["START", "END"]:
+                spinbox = QSpinBox()
+            else:
+                spinbox = QDoubleSpinBox()
+                
             spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
-            spinbox.setValue(value)
+            # Устанавливаем значение из загруженных настроек или по умолчанию
+            spinbox.setValue(self.current_settings.get(key, self.DEFAULT_SETTINGS[key]))
             spinbox.setRange(0, 1000)
-            spinbox.setSingleStep(0.5)
             spinbox.setStyleSheet("""
-                QDoubleSpinBox {
+                QAbstractSpinBox {
                     background-color: white;
                     border: 1px solid #e67e22;
                     border-radius: 5px;
@@ -1540,11 +1560,13 @@ class SettingsScreen(QWidget):
                     font-size: 13px;
                     color: #5a3921;
                 }
-                QDoubleSpinBox:focus {
+                QAbstractSpinBox:focus {
                     border-color: #d35400;
                 }
             """)
-            spinbox.editingFinished.connect(lambda n=name, sb=spinbox: self.setting_changed(n, sb.value()))
+            
+            # Сохраняем ссылку на поле ввода
+            self.spinboxes[key] = spinbox
             
             setting_layout.addWidget(label)
             setting_layout.addWidget(spinbox)
@@ -1552,10 +1574,33 @@ class SettingsScreen(QWidget):
             
             main_layout.addWidget(setting_container)
         
-        # Добавляем растягивающийся элемент перед кнопкой
+        # Добавляем растягивающийся элемент перед кнопками
         main_layout.addStretch()
         
-        # Кнопка "Добавить день" внизу слева
+        # Кнопки внизу
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(15)
+        
+        # Кнопка сохранения
+        save_btn = QPushButton("Сохранить")
+        save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #5cb85c;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                padding: 8px 15px;
+                font-weight: bold;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background-color: #4cae4c;
+            }
+        """)
+        save_btn.clicked.connect(self.save_settings)
+        btn_layout.addWidget(save_btn)
+        
+        # Кнопка "Добавить день"
         add_day_btn = QPushButton("Добавить день")
         add_day_btn.setStyleSheet("""
             QPushButton {
@@ -1572,18 +1617,60 @@ class SettingsScreen(QWidget):
             }
         """)
         add_day_btn.clicked.connect(self.add_day)
-        
-        btn_layout = QHBoxLayout()
         btn_layout.addWidget(add_day_btn)
-        btn_layout.addStretch()
         
+        btn_layout.addStretch()
         main_layout.addLayout(btn_layout)
 
-    def setting_changed(self, name, value):
-        """Обработчик изменения настройки (срабатывает после завершения редактирования)"""
-        print(f"Изменение сохранено: {name} = {value}")
-    
+    def _load_settings(self):
+        """Загрузка настроек из файла или использование значений по умолчанию"""
+        settings_path = f'.cache/{get_hash()}/userdata.json'
+        
+        try:
+            # Создаём директорию если её нет
+            os.makedirs(os.path.dirname(settings_path), exist_ok=True)
+            
+            # Если файл существует, загружаем настройки
+            if os.path.exists(settings_path):
+                with open(settings_path, 'r') as file:
+                    loaded_settings = json.load(file)
+                    # Проверяем наличие всех необходимых ключей
+                    for key in self.DEFAULT_SETTINGS.keys():
+                        if key not in loaded_settings:
+                            loaded_settings[key] = self.DEFAULT_SETTINGS[key]
+                    return loaded_settings
+            else:
+                # Если файла нет, создаём его с настройками по умолчанию
+                with open(settings_path, 'w') as file:
+                    json.dump(self.DEFAULT_SETTINGS, file)
+                return self.DEFAULT_SETTINGS.copy()
+                
+        except Exception as e:
+            print(f"Ошибка при загрузке настроек: {e}")
+            return self.DEFAULT_SETTINGS.copy()
+
+    def save_settings(self):
+        """Сбор и сохранение всех настроек"""
+        # Собираем значения из всех полей
+        settings = {
+            key: spinbox.value() 
+            for key, spinbox in self.spinboxes.items()
+        }
+        set_end(settings['END'])
+        set_start(settings['START'])
+
+        # Сохраняем в файл
+        settings_path = f'.cache/{get_hash()}/userdata.json'
+        try:
+            os.makedirs(os.path.dirname(settings_path), exist_ok=True)
+            with open(settings_path, "w") as file:
+                json.dump(settings, file, indent=2)
+            print("Настройки успешно сохранены")
+        except Exception as e:
+            print(f"Ошибка сохранения настроек: {e}")
+
     def add_day(self):
+        # Оригинальная логика
         set_end(get_end() + 1)
         for wh in get_warehouses():
             df = pd.read_csv(wh['file_path'])
@@ -1592,7 +1679,7 @@ class SettingsScreen(QWidget):
             wh['future'] = wh['future'][1:]
             wh['future'].append(0)
             df.to_csv(wh['file_path'], index=False)
-        print(len(wh['future']), len(df.iloc[get_start():get_end()]))
+        print(f"Размер future: {len(wh['future'])}, Размер данных: {len(df.iloc[get_start():get_end()])}")
         print("Добавлен день")
 
 class AccountScreen(QWidget):
