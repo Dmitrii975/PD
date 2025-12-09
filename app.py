@@ -500,7 +500,7 @@ class HomeScreen(QWidget):
                 background-color: #ffa56a;
             }
         """)
-        add_btn.clicked.connect(self.add_warehouse)  # ОБРАБОТЧИК: Открытие диалога добавления склада
+        add_btn.clicked.connect(self.add_warehouse)
         header_layout.addWidget(add_btn)
         
         main_layout.addLayout(header_layout)
@@ -557,20 +557,9 @@ class HomeScreen(QWidget):
         name = warehouse_data.get('name', 'Без названия')
         file_path = warehouse_data.get('file_path', '')
         
-        # ВЫЧИСЛЯЕМ СТАТУС ДИНАМИЧЕСКИ на основе текущих метрик
+        # Вычисляем метрики для отображения загруженности
         metrics = calculate_metrics(file_path, get_hash(), get_start(), get_end())
         load_percentage = metrics.get('cur_fullness')
-        status = metrics.get('status', False)  # Динамически вычисляем!
-        
-        # Определяем статус текст и цвет
-        if status:  # True = требуется действие
-            status_text = "Требуется действие!"
-            status_color = "#e74c3c"  # Красный
-            is_action_required = True
-        else:  # False = все ОК
-            status_text = "ОК"
-            status_color = "#27ae60"  # Зеленый
-            is_action_required = False
         
         # Создаем элемент списка
         item = QWidget()
@@ -587,9 +576,9 @@ class HomeScreen(QWidget):
         layout.setContentsMargins(15, 0, 15, 0)
         layout.setSpacing(15)
         
-        # Имя склада (увеличиваем минимальную ширину для длинных названий)
+        # Имя склада
         name_label = QLabel(name)
-        name_label.setMinimumWidth(150)  # Минимальная ширина для имени склада
+        name_label.setMinimumWidth(150)
         name_label.setStyleSheet("""
             font-weight: bold; 
             color: #5a3921; 
@@ -608,10 +597,10 @@ class HomeScreen(QWidget):
         separator.setFixedWidth(1)
         layout.addWidget(separator)
         
-        # Загруженность (увеличиваем ширину)
+        # Загруженность
         load_text = f"Загруженность: {load_percentage}%" if load_percentage is not None else "Загруженность: --"
         load_label = QLabel(load_text)
-        load_label.setMinimumWidth(150)  # Минимальная ширина для информации о загруженности
+        load_label.setMinimumWidth(150)
         load_label.setStyleSheet("""
             color: #5a3921; 
             font-size: 14px;
@@ -624,53 +613,33 @@ class HomeScreen(QWidget):
         # Растягиваемое пространство
         layout.addStretch()
         
-        # Создаем статус-виджет (кнопка или текст в зависимости от статуса)
-        if is_action_required:
-            status_btn = QPushButton(status_text)
-            status_btn.setStyleSheet(f"""
-                QPushButton {{
-                    color: {status_color}; 
-                    font-weight: bold; 
-                    font-size: 14px;
-                    background: transparent;
-                    border: none;
-                    border-radius: 4px;
-                    padding: 2px 8px;
-                    text-align: right;
-                }}
-                QPushButton:hover {{
-                    background-color: rgba(231, 76, 60, 0.2);
-                }}
-            """)
-            # Сохраняем данные склада в кнопке для доступа при нажатии
-            status_btn.warehouse_data = warehouse_data
-            status_btn.clicked.connect(lambda checked, wh=name: self.open_transport_dialog(wh))  # ОБРАБОТЧИК: Открытие диалога перевозки
-            layout.addWidget(status_btn)
-            status_widget = status_btn
-        else:
-            status_label = QLabel(status_text)
-            status_label.setStyleSheet(f"""
-                color: {status_color}; 
+        # ВСЕГДА создаем кнопку для перевозки
+        transport_btn = QPushButton("Сделать перевозку")
+        transport_btn.setStyleSheet("""
+            QPushButton {
+                color: #2980b9;   /* Синий цвет для акцента */
                 font-weight: bold; 
                 font-size: 14px;
                 background: transparent;
                 border: none;
-                outline: none;
-            """)
-            layout.addWidget(status_label)
-            status_widget = status_label
+                border-radius: 4px;
+                padding: 2px 8px;
+                text-align: right;
+            }
+            QPushButton:hover {
+                background-color: rgba(41, 128, 185, 0.2);
+            }
+        """)
+        transport_btn.setMinimumWidth(140)  # Гарантируем минимальную ширину
+        transport_btn.clicked.connect(lambda checked, wh=name: self.open_transport_dialog(wh))
         
-        # Устанавливаем минимальную ширину для кнопки/текста статуса
-        if isinstance(status_widget, QPushButton):
-            status_widget.setMinimumWidth(130)
-        else:
-            status_widget.setMinimumWidth(50)
+        layout.addWidget(transport_btn)
         
         self.scroll_layout.addWidget(item)
         
         # Сохраняем связь между данными и виджетом
         item.warehouse_data = warehouse_data
-        item.status_widget = status_widget  # Сохраняем виджет статуса для обновления
+        item.status_widget = transport_btn  # Теперь это всегда кнопка
         
         # Сохраняем в локальный словарь
         self.warehouse_widgets[name] = item
@@ -681,7 +650,7 @@ class HomeScreen(QWidget):
         """Открывает диалог для добавления нового склада"""
         dialog = QDialog(self)
         dialog.setWindowTitle("Добавить склад")
-        dialog.setFixedSize(400, 200)  # Увеличиваем ширину для лучшего отображения
+        dialog.setFixedSize(400, 200)
         
         main_layout = QVBoxLayout(dialog)
         main_layout.setContentsMargins(15, 15, 15, 15)
@@ -702,7 +671,7 @@ class HomeScreen(QWidget):
         file_label.setStyleSheet("font-weight: normal;")
         file_path_input = QLineEdit()
         file_path_input.setPlaceholderText("Выберите файл")
-        file_path_input.setMinimumWidth(200)  # Гарантируем минимальную ширину
+        file_path_input.setMinimumWidth(200)
         file_path_input.setReadOnly(True)
         
         browse_btn = QPushButton("Обзор...")
@@ -718,7 +687,7 @@ class HomeScreen(QWidget):
             )
             if file_path:
                 file_path_input.setText(file_path)
-                file_path_input.setToolTip(file_path)  # Добавляем подсказку с полным путем
+                file_path_input.setToolTip(file_path)
         
         browse_btn.clicked.connect(browse_file)
         
@@ -742,7 +711,7 @@ class HomeScreen(QWidget):
                 background-color: #d0d0d0;
             }
         """)
-        cancel_btn.clicked.connect(dialog.reject)  # ОБРАБОТЧИК: Закрытие диалога без сохранения
+        cancel_btn.clicked.connect(dialog.reject)
         
         add_btn = QPushButton("Добавить")
         add_btn.setStyleSheet("""
@@ -779,7 +748,6 @@ class HomeScreen(QWidget):
                     return
             
             try:
-                # Формируем данные склада (ТОЛЬКО ОСНОВНЫЕ ДАННЫЕ!)
                 warehouse_data = {
                     "name": name,
                     "file_path": pth,
@@ -791,7 +759,7 @@ class HomeScreen(QWidget):
                 # Добавляем в глобальный список
                 add_warehouse(warehouse_data)
                 
-                # Создаем виджет (он сам вычислит статус)
+                # Создаем виджет
                 self.create_warehouse_widget(warehouse_data)
                 
                 dialog.accept()
@@ -812,15 +780,14 @@ class HomeScreen(QWidget):
         dialog.exec()
 
     def update_all_warehouses_status(self):
-        """Обновляет статусы всех складов (например, при изменении настроек)"""
+        """Обновляет загруженность всех складов (статусы больше не обновляются)"""
         for name, widget in self.warehouse_widgets.items():
             warehouse_data = widget.warehouse_data
             file_path = warehouse_data.get('file_path')
             
             if file_path:
-                # Пересчитываем метрики
+                # Пересчитываем метрики только для загруженности
                 metrics = calculate_metrics(file_path, get_hash(), get_start(), get_end())
-                status = metrics.get('status', False)
                 load_percentage = metrics.get('cur_fullness')
                 
                 # Обновляем загруженность
@@ -829,98 +796,7 @@ class HomeScreen(QWidget):
                         load_text = f"Загруженность: {load_percentage}%" if load_percentage is not None else "Загруженность: --"
                         child.setText(load_text)
                         break
-                
-                # Определяем текст и цвет статуса
-                if status:
-                    status_text = "Требуется действие!"
-                    status_color = "#e74c3c"
-                    is_action_required = True
-                else:
-                    status_text = "ОК"
-                    status_color = "#27ae60"
-                    is_action_required = False
-                
-                # Получаем текущий виджет статуса
-                status_widget = widget.status_widget
-                
-                # Если текущий виджет - кнопка, а статус изменился на "ОК", заменяем на QLabel
-                if isinstance(status_widget, QPushButton) and not is_action_required:
-                    # Удаляем старую кнопку
-                    layout = widget.layout()
-                    layout.removeWidget(status_widget)
-                    status_widget.deleteLater()
-                    
-                    # Создаем новый QLabel
-                    new_status_label = QLabel(status_text)
-                    new_status_label.setStyleSheet(f"""
-                        color: {status_color}; 
-                        font-weight: bold; 
-                        font-size: 14px;
-                        background: transparent;
-                        border: none;
-                        outline: none;
-                    """)
-                    layout.addWidget(new_status_label)
-                    widget.status_widget = new_status_label
-                
-                # Если текущий виджет - текст, а статус изменился на "Требуется действие", заменяем на QPushButton
-                elif isinstance(status_widget, QLabel) and is_action_required:
-                    # Удаляем старый QLabel
-                    layout = widget.layout()
-                    layout.removeWidget(status_widget)
-                    status_widget.deleteLater()
-                    
-                    # Создаем новую кнопку
-                    new_status_btn = QPushButton(status_text)
-                    new_status_btn.setStyleSheet(f"""
-                        QPushButton {{
-                            color: {status_color}; 
-                            font-weight: bold; 
-                            font-size: 14px;
-                            background: transparent;
-                            border: none;
-                            border-radius: 4px;
-                            padding: 2px 8px;
-                            text-align: right;
-                        }}
-                        QPushButton:hover {{
-                            background-color: rgba(231, 76, 60, 0.2);
-                        }}
-                    """)
-                    new_status_btn.warehouse_data = warehouse_data
-                    new_status_btn.clicked.connect(lambda checked, wh=name: self.open_transport_dialog(wh))  # ОБРАБОТЧИК: Открытие диалога перевозки
-                    layout.addWidget(new_status_btn)
-                    widget.status_widget = new_status_btn
-                
-                # Если виджет того же типа, просто обновляем его свойства
-                else:
-                    if isinstance(status_widget, QLabel):
-                        status_widget.setText(status_text)
-                        status_widget.setStyleSheet(f"""
-                            color: {status_color}; 
-                            font-weight: bold; 
-                            font-size: 14px;
-                            background: transparent;
-                            border: none;
-                            outline: none;
-                        """)
-                    elif isinstance(status_widget, QPushButton):
-                        status_widget.setText(status_text)
-                        status_widget.setStyleSheet(f"""
-                            QPushButton {{
-                                color: {status_color}; 
-                                font-weight: bold; 
-                                font-size: 14px;
-                                background: transparent;
-                                border: none;
-                                border-radius: 4px;
-                                padding: 2px 8px;
-                                text-align: right;
-                            }}
-                            QPushButton:hover {{
-                                background-color: rgba(231, 76, 60, 0.2);
-                            }}
-                        """)
+                # Кнопки перевозки не обновляются - они всегда одинаковые
 
     def open_transport_dialog(self, warehouse_name):
         """Открывает диалог для создания перевозки"""
@@ -935,9 +811,11 @@ class HomeScreen(QWidget):
             QMessageBox.warning(self, "Ошибка", f"Склад '{warehouse_name}' не найден")
             return
         
+        metrics = calculate_metrics(warehouse_data['file_path'], get_hash(), get_start(), get_end())
+        
         dialog = QDialog(self)
         dialog.setWindowTitle(f"Создать перевозку из {warehouse_name}")
-        dialog.setMinimumSize(450, 300)  # Увеличиваем минимальный размер
+        dialog.setMinimumSize(450, 300)
         
         dialog.setStyleSheet("""
             QDialog {
@@ -955,7 +833,6 @@ class HomeScreen(QWidget):
                 padding: 5px;
                 font-size: 14px;
             }
-            /* СТИЛИ ДЛЯ QCOMBOBOX - УПРОЩЕННЫЕ И РАБОЧИЕ */
             QComboBox {
                 background-color: white;
                 border: 1px solid #e67e22;
@@ -975,8 +852,8 @@ class HomeScreen(QWidget):
                 background-color: white;
                 border: 1px solid #e67e22;
                 border-radius: 5px;
-                selection-background-color: #ffd2a6; /* Фон при выборе */
-                selection-color: #5a3921; /* Цвет текста при выборе */
+                selection-background-color: #ffd2a6;
+                selection-color: #5a3921;
                 color: #5a3921;
                 outline: 0;
                 padding: 4px;
@@ -987,9 +864,8 @@ class HomeScreen(QWidget):
                 padding: 4px 8px;
                 color: #5a3921;
             }
-            /* ПРОСТАЯ НО РАБОЧАЯ АНИМАЦИЯ НАВЕДЕНИЯ */
             QComboBox QAbstractItemView::item:hover {
-                background-color: #ffebd9; /* Светло-оранжевый при наведении */
+                background-color: #ffebd9;
                 color: #5a3921;
                 border-radius: 4px;
             }
@@ -1020,32 +896,33 @@ class HomeScreen(QWidget):
         # Поле для ввода количества товара
         quantity_layout = QHBoxLayout()
         quantity_label = QLabel("Количество товара:")
-        quantity_label.setMinimumWidth(150)  # Фиксируем ширину метки
+        quantity_label.setMinimumWidth(150)
         quantity_input = QLineEdit()
         quantity_input.setPlaceholderText("Введите количество")
-        quantity_input.setValidator(QIntValidator(1, 10000))  # Только положительные числа
+        quantity_input.setValidator(QIntValidator(1, 10000))
+        quantity_input.setText(str(metrics['transfer_recomend']))
         quantity_layout.addWidget(quantity_label)
-        quantity_layout.addWidget(quantity_input, 1)  # Растягиваем поле ввода
+        quantity_layout.addWidget(quantity_input, 1)
         main_layout.addLayout(quantity_layout)
         
         # Поле для ввода срока доставки
         days_layout = QHBoxLayout()
         days_label = QLabel("Срок доставки (дней):")
-        days_label.setMinimumWidth(150)  # Фиксируем ширину метки
+        days_label.setMinimumWidth(150)
         days_input = QLineEdit()
         days_input.setPlaceholderText("Введите срок")
-        days_input.setValidator(QIntValidator(1, 365))  # От 1 до 365 дней
+        days_input.setValidator(QIntValidator(1, 365))
         days_layout.addWidget(days_label)
-        days_layout.addWidget(days_input, 1)  # Растягиваем поле ввода
+        days_layout.addWidget(days_input, 1)
         main_layout.addLayout(days_layout)
         
         # Выпадающий список для выбора направления
         direction_layout = QHBoxLayout()
         direction_label = QLabel("Направление:")
-        direction_label.setMinimumWidth(150)  # Фиксируем ширину метки
+        direction_label.setMinimumWidth(150)
         
         direction_combo = QComboBox()
-        direction_combo.setMinimumHeight(30)  # Увеличиваем высоту для лучшего отображения
+        direction_combo.setMinimumHeight(30)
         direction_combo.setView(QListView())
 
         # Получаем список всех складов, кроме текущего
@@ -1066,10 +943,10 @@ class HomeScreen(QWidget):
             direction_combo.setToolTip("Нет доступных складов для перевозки")
         
         direction_layout.addWidget(direction_label)
-        direction_layout.addWidget(direction_combo, 1)  # Растягиваем комбобокс
+        direction_layout.addWidget(direction_combo, 1)
         main_layout.addLayout(direction_layout)
         
-        # Добавляем пустое пространство для лучшего отображения
+        # Добавляем пустое пространство
         main_layout.addStretch()
         
         # Кнопки
@@ -1078,7 +955,7 @@ class HomeScreen(QWidget):
         
         cancel_btn = QPushButton("Отмена")
         cancel_btn.setMinimumWidth(100)
-        cancel_btn.clicked.connect(dialog.reject)  # ОБРАБОТЧИК: Закрытие диалога без сохранения
+        cancel_btn.clicked.connect(dialog.reject)
         
         create_btn = QPushButton("Создать")
         create_btn.setObjectName("primary")
@@ -1109,43 +986,48 @@ class HomeScreen(QWidget):
                     QMessageBox.warning(dialog, "Ошибка", "Срок доставки должен быть больше 0")
                     return
                 
-                # Получаем индекс выбранного склада (если выбран склад)
-                selected_warehouse_index = -1
-                if direction != "listings":
-                    for i, wh in enumerate(all_warehouses):
-                        if wh.get('name') == direction and wh.get('name') != warehouse_name:
-                            selected_warehouse_index = i
-                            break
-
-                source_warehouse_index = -1
-                for i, wh in enumerate(all_warehouses):
-                    if wh.get('name') == warehouse_name:
-                        source_warehouse_index = i
-                        break
-                # Логика обработки перевозки
+                # Получаем индексы складов
+                source_warehouse_index = next(
+                    (i for i, wh in enumerate(all_warehouses) if wh.get('name') == warehouse_name),
+                    -1
+                )
+                
                 if direction == "listings":
                     # Отправка в объявления
                     print(f"Создание перевозки: {quantity} единиц товара на {days} дней в объявления")
-                    # TODO: Добавить логику отправки в объявления
+                    # TODO: Реализовать логику отправки в объявления
                     QMessageBox.information(dialog, "Успех", "Перевозка в объявления создана")
                 else:
                     # Отправка в существующий склад
-                    print(f"Создание перевозки: {quantity} единиц товара на {days} дней в склад '{direction}', {selected_warehouse_index}")
-                    target = get_warehouses()[selected_warehouse_index]
-                    target['future'][days-1] += quantity
-
-                    get = get_warehouses()[source_warehouse_index]
-                    df = pd.read_csv(get['file_path'])
-
-                    df.loc[len(df) - abs(get_end()) - 1, 'inventory'] -= quantity
-                    df.to_csv(get['file_path'], index=False)
-
+                    target_warehouse_index = next(
+                        (i for i, wh in enumerate(all_warehouses) if wh.get('name') == direction),
+                        -1
+                    )
+                    
+                    if target_warehouse_index == -1:
+                        QMessageBox.warning(dialog, "Ошибка", "Целевой склад не найден")
+                        return
+                    
+                    # Обновляем данные целевого склада
+                    target_warehouse = get_warehouses()[target_warehouse_index]
+                    target_warehouse['future'][days-1] += quantity
+                    
+                    # Обновляем данные исходного склада
+                    source_warehouse = get_warehouses()[source_warehouse_index]
+                    df = pd.read_csv(source_warehouse['file_path'])
+                    df.loc[get_end() - 1, 'inventory'] -= quantity
+                    df.to_csv(source_warehouse['file_path'], index=False)
+                    
                     QMessageBox.information(dialog, "Успех", f"Перевозка в склад '{direction}' создана")
                 
                 dialog.accept()
                 
             except ValueError:
                 QMessageBox.warning(dialog, "Ошибка", "Введите корректные числовые значения")
+            except Exception as e:
+                QMessageBox.critical(dialog, "Ошибка", f"Ошибка при создании перевозки:\n{str(e)}")
+                import traceback
+                traceback.print_exc()
         
         create_btn.clicked.connect(create_transport)
         
@@ -1705,8 +1587,10 @@ class SettingsScreen(QWidget):
         set_end(get_end() + 1)
         for wh in get_warehouses():
             df = pd.read_csv(wh['file_path'])
-            df.loc[len(df) - abs(get_end()) - 1, 'inventory'] += wh['future'][0]
+            df.loc[get_end() - 1, 'inventory'] = \
+                  df.loc[get_end() - 2, 'inventory'] + df.loc[get_end() - 1, 'production'] - df.loc[get_end() - 1, 'demand'] + wh['future'][0]
             wh['future'] = wh['future'][1:]
+            wh['future'].append(0)
             df.to_csv(wh['file_path'], index=False)
         print(len(wh['future']), len(df.iloc[get_start():get_end()]))
         print("Добавлен день")

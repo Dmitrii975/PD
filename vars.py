@@ -14,8 +14,9 @@ def get_calculated_vars(hsh):
     return {
         "DATA": data,
         "TARGET_INVENTORY": usr_data['TARGET_INVENTORY'],
-        "ACTION_ON": usr_data['ACTION_ON'],
+        "MAX_SAFE": usr_data['MAX_SAFE'],
         "START": usr_data['START'],
-        "END": usr_data['END']
+        "END": usr_data['END'],
+        "MIN_SAFE": usr_data['MIN_SAFE']
     }
 

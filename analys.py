@@ -42,11 +42,25 @@ def calculate_metrics(pth, hsh, START, END) -> dict: #Возвращем мет�
     df = pd.read_csv(pth)
     df = df.iloc[START:END]
     metrics['avg_fullness'] = round(df['inventory'].mean() / df['max_space'].iloc[0] * 100, 2)
-    metrics['status'] = df['inventory'].iloc[-1] >= vrs['ACTION_ON']
+
+    t = df['inventory'].iloc[-1]
+    if t >= vrs['MAX_SAFE'] * 1.1:
+        metrics['status'] = 1
+    elif t <= vrs['MIN_SAFE'] * 0.9:
+        metrics['status'] = 2
+    else:
+        metrics['status'] = 0
+
+    if metrics['status'] != 0:
+        exceed = abs(round(t - vrs['TARGET_INVENTORY']))
+        metrics['transfer_recomend'] = exceed
+    else:
+        metrics['transfer_recomend'] = 0
+
     metrics['cur_fullness'] = round(df['inventory'].iloc[-1] / df['max_space'].iloc[0] * 100, 2)
-    metrics['avg_salles'] = df['demand'].mean().__round__(2)
+    metrics['avg_salles'] = df['demand'].mean().round(2)
     metrics['days_with_over'] = round(sum(df['inventory'] > vrs['TARGET_INVENTORY']) / len(df) * 100, 2)
-    metrics['volaty'] = df['demand'].std().__round__(2)
+    metrics['volaty'] = df['demand'].std().round(2)
     metrics['arrived_count'] = sum(df['travel'])
 
     return metrics
