@@ -1,23 +1,26 @@
+# -*- coding: utf-8 -*-
+
 import os
 import json
+import requests
+import hashlib
+
 
 
 def register_user(email, password, company_name):
-    hsh = hash(email + password)
+    b = {"TARGET_INVENTORY": 50.0, "MAX_SAFE": 70.0, "START": 7, "END": 42, "MIN_SAFE": 30.0}
 
-    if os.path.exists(f'.cache/{hsh}'):
-        pass
-    else:
-        base = {
-            "user_id": 0,
-            "user_hash": hsh,
-            "tables_path": ".cache/tables/",
-            "user_data_path": ".cache/userdata.json",
-            "target_inventory": 50,
-            "safe_min": 30,
-            "action_on": 70
-        }
-        os.mkdir(f'.cache/{hsh}')
+    url = 'http://147.45.108.69:5000/register'
+    headers = {"login": email, "Password": password, "Company": company_name}
+    r = requests.post(url, headers=headers)
+    ans = r.json()
+
+    if ans['response'] == 'Success!':
+        hsh = hashlib.md5(str(ans['user_id']).encode('utf-8')).hexdigest()
+        os.makedirs(f'.cache/{hsh}', exist_ok=True)
         with open(f'.cache/{hsh}/userdata.json', 'w') as f:
-            json.dump(base, f)
+            json.dump(b, f)
+        return ans['user_id']
+    else:
+        return None
     

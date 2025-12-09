@@ -17,7 +17,9 @@ from analys import calculate_metrics, make_plot, read_analys_data, write_analys_
 import pickle
 import os
 import hashlib
-
+from register import register_user
+from login import login
+from server import server_delete_account
 
 WAREHOUSES = []
 
@@ -68,6 +70,13 @@ class LoginScreen(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.main_app = parent  # Сохраняем ссылку на MainApp
+        
+        if os.path.exists('.cache/last_user.json'):
+            with open('.cache/last_user.json', 'r') as f:
+                d = json.load(f)
+                self.main_app.show_main_interface(d['user_id'])
+
+
         self.setStyleSheet("background-color: #f8f4e9;")
         # Главный layout для центрирования
         main_layout = QVBoxLayout()
@@ -206,12 +215,15 @@ class LoginScreen(QWidget):
     
     # Новый метод обработки входа
     def handle_login(self):
-        """Обработчик нажатия кнопки входа с валидацией"""
-        if self.validate_input():
-            # Все данные корректны — переходим в основной интерфейс
+        """Обработчик нажатия кнопки регистрации с валидацией"""
+        ans, uid = self.validate_input()
+        if ans:
+            with open('.cache/last_user.json', 'w') as f:
+                json.dump({'user_id': uid}, f)
             if self.main_app:
-                self.main_app.show_main_interface()
+                self.main_app.show_main_interface(uid)
     
+
     def validate_input(self) -> bool:
         """Проверка корректности введенных данных"""
         email = self.email_input.text().strip()
@@ -219,22 +231,26 @@ class LoginScreen(QWidget):
         
         # Специальное исключение для отладки: если во все поля введена "1"
         if email == "1" and password == "1":
-            return True
-            
+            return True, -1
+        
         # Проверка email
         if not email:
             self.show_error("Поле email обязательно для заполнения")
-            return False
+            return False, -2
         if '@' not in email or '.' not in email.split('@')[-1]:
             self.show_error("Некорректный формат email адреса")
-            return False
+            return False, -2
             
         # Проверка пароля
         if len(password) < 8:
             self.show_error("Пароль должен содержать минимум 8 символов")
-            return False
-            
-        return True
+            return False, -2
+
+        ans = login(email, password)
+
+        if ans != None:
+            print(f'Регистрация успешна, user_id = {ans}')
+            return True, ans
 
     def show_error(self, message: str):
         """Унифицированное отображение ошибок"""
@@ -263,6 +279,7 @@ class LoginScreen(QWidget):
     def show_forgot_password(self):
         """Заглушка для функции восстановления пароля"""
         print("Восстановление пароля")
+
 
 class RegisterScreen(QWidget):
     def __init__(self, parent=None):
@@ -410,11 +427,14 @@ class RegisterScreen(QWidget):
     
     def handle_registration(self):
         """Обработчик нажатия кнопки регистрации с валидацией"""
-        if self.validate_input():
-            # Все данные корректны — переходим в основной интерфейс
+        ans, uid = self.validate_input()
+        if ans:
+            with open('.cache/last_user.json', 'w') as f:
+                json.dump({'user_id': uid}, f)
             if self.main_app:
-                self.main_app.show_main_interface()
+                self.main_app.show_main_interface(uid)
     
+
     def validate_input(self) -> bool:
         """Проверка корректности введенных данных"""
         email = self.email_input.text().strip()
@@ -423,27 +443,31 @@ class RegisterScreen(QWidget):
         
         # Специальное исключение для отладки: если во все поля введена "1"
         if email == "1" and password == "1" and company_name == "1":
-            return True
+            return True, -1
         
         # Проверка email
         if not email:
             self.show_error("Поле email обязательно для заполнения")
-            return False
+            return False, -2
         if '@' not in email or '.' not in email.split('@')[-1]:
             self.show_error("Некорректный формат email адреса")
-            return False
+            return False, -2
             
         # Проверка пароля
         if len(password) < 8:
             self.show_error("Пароль должен содержать минимум 8 символов")
-            return False
+            return False, -2
             
         # Проверка названия компании
         if not company_name:
             self.show_error("Название компании обязательно для заполнения")
-            return False
-        
-        return True
+            return False, -2
+
+        ans = register_user(email, password, company_name)
+
+        if ans != None:
+            print(f'Регистрация успешна, user_id = {ans}')
+            return True, ans
 
     def show_error(self, message: str):
         """Унифицированное отображение ошибок"""
@@ -1847,7 +1871,8 @@ class AccountScreen(QWidget):
         """)
         
         # Добавляем кнопки в нужном порядке
-        
+        logout_btn.clicked.connect(self.logout)
+
         button_layout.addWidget(change_pass_btn)
         button_layout.addWidget(clear_data_btn)
         button_layout.addWidget(logout_btn)
@@ -1856,6 +1881,17 @@ class AccountScreen(QWidget):
         form_layout.addLayout(button_layout)
         
         main_layout.addWidget(form_container)
+
+    def logout(self):
+        if os.path.exists('.cache/last_user.json'):
+            os.remove('.cache/last_user.json')
+            os.execv(sys.executable, ['python'] + sys.argv)
+
+    def delete_account(self):
+        if server_delete_account(get_user_id()):
+            os.remove('.cache/last_user.json')
+            os.execv(sys.executable, ['python'] + sys.argv)
+
 
 class MenuButton(QPushButton):
     """Кастомная кнопка меню с анимацией и иконками"""
@@ -2207,9 +2243,9 @@ class MainApp(QMainWindow):
     def show_register_screen(self):
         self.central_widget.setCurrentIndex(1)
     
-    def show_main_interface(self):
+    def show_main_interface(self, uid=-1):
         # Устанавливаем USER_ID (заглушка)
-        set_user_id(-1)
+        set_user_id(uid)
         print(get_hash())
         # Инициализируем склады из кэша (если есть)
         read_warehouses()
