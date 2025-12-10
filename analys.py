@@ -3,7 +3,7 @@ import pandas as pd
 from vars import get_calculated_vars
 import numpy as np
 import json
-
+from server import set_user_params
 
 START = None
 END = None
@@ -27,13 +27,14 @@ def read_analys_data(hsh):
     set_start(v['START'])
     set_end(v['END'])
 
-def write_analys_data(hsh):
+def write_analys_data(uid, hsh):
     v = get_calculated_vars(hsh)
     del v['DATA']
     v['START'] = get_start()
     v['END'] = get_end()
     with open(f'.cache/{hsh}/userdata.json', 'w') as f:
         json.dump(v, f)
+    set_user_params(uid=uid, st=get_start(), en=get_end())
 
 def calculate_metrics(pth, hsh, START, END) -> dict: #Возвращем метрики для анализа
     vrs = get_calculated_vars(hsh)

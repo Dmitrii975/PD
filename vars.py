@@ -20,3 +20,5 @@ def get_calculated_vars(hsh):
         "MIN_SAFE": usr_data['MIN_SAFE']
     }
 
+def get_server_vars(uid):
+    pass

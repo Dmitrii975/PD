@@ -19,7 +19,8 @@ import os
 import hashlib
 from register import register_user
 from login import login
-from server import server_delete_account
+from server import *
+import shutil
 
 WAREHOUSES = []
 
@@ -772,12 +773,24 @@ class HomeScreen(QWidget):
                     return
             
             try:
+                tid = send_table_file(pth, get_user_id(), name, [0] * 30)
+                if tid == None:
+                    QMessageBox.critical(self, "Ошибка", f"Не удалось обработать файл:\n{str(e)}")
+
+                if not os.path.exists(f'.cache/{get_hash()}/tables'):
+                    os.mkdir(f'.cache/{get_hash()}/tables')
+                os.replace(
+                    pth,
+                    f'.cache/{get_hash()}/tables/{tid}.csv'
+                )
+
                 warehouse_data = {
+                    "table_id": tid, 
                     "name": name,
-                    "file_path": pth,
+                    "file_path": f'.cache/{get_hash()}/tables/{tid}.csv',
                     "future": [0] * 30
                 }
-                
+
                 print(f"Добавлен склад '{name}'")
                 
                 # Добавляем в глобальный список
@@ -1019,7 +1032,9 @@ class HomeScreen(QWidget):
                 if direction == "listings":
                     # Отправка в объявления
                     print(f"Создание перевозки: {quantity} единиц товара на {days} дней в объявления")
-                    # TODO: Реализовать логику отправки в объявления
+                    
+                    
+
                     QMessageBox.information(dialog, "Успех", "Перевозка в объявления создана")
                 else:
                     # Отправка в существующий склад
@@ -1427,10 +1442,6 @@ class Wall(QWidget):
             ["Компания 2", "200", "5"],
             ["Склад-партнер", "150", "2"],
             ["Логистик-Хаб", "300", "7"],
-            ["Доп. Компания", "75", "1"],
-            ["Еще одна", "250", "4"],
-            ["Тестовая", "100", "6"],
-            ["Пример", "400", "2"]
         ]
         
         # Создание блоков объявлений
@@ -1508,7 +1519,6 @@ class Wall(QWidget):
 
 
 class SettingsScreen(QWidget):
-    # Значения по умолчанию для настроек
     DEFAULT_SETTINGS = {
         "TARGET_INVENTORY": 50,
         "MAX_SAFE": 70,
@@ -1525,13 +1535,13 @@ class SettingsScreen(QWidget):
         main_layout.setSpacing(10)
         
         # Заголовок
-        title = QLabel("⚙️ Настройки приложения")
+        title = QLabel("Настройки приложения")
         title.setStyleSheet("font-size: 24px; color: #5a3921; font-weight: bold;")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(title)
         
-        # Загружаем настройки из файла или используем значения по умолчанию
-        self.current_settings = self._load_settings()
+        # Инициализируем пустой словарь для текущих настроек
+        self.current_settings = {}
         
         # Список настроек с переводами
         settings_list = [
@@ -1565,15 +1575,13 @@ class SettingsScreen(QWidget):
             label.setStyleSheet("font-size: 13px; color: #5a3921;")
             label.setFixedWidth(220)
             
-            # Поле ввода числа (без кнопок-спиннеров)
+            # Поле ввода числа
             if key in ["START", "END"]:
                 spinbox = QSpinBox()
             else:
                 spinbox = QDoubleSpinBox()
                 
             spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
-            # Устанавливаем значение из загруженных настроек или по умолчанию
-            spinbox.setValue(self.current_settings.get(key, self.DEFAULT_SETTINGS[key]))
             spinbox.setRange(0, 1000)
             spinbox.setStyleSheet("""
                 QAbstractSpinBox {
@@ -1589,16 +1597,12 @@ class SettingsScreen(QWidget):
                 }
             """)
             
-            # Сохраняем ссылку на поле ввода
             self.spinboxes[key] = spinbox
-            
             setting_layout.addWidget(label)
             setting_layout.addWidget(spinbox)
             setting_layout.addStretch()
-            
             main_layout.addWidget(setting_container)
         
-        # Добавляем растягивающийся элемент перед кнопками
         main_layout.addStretch()
         
         # Кнопки внизу
@@ -1645,41 +1649,55 @@ class SettingsScreen(QWidget):
         
         btn_layout.addStretch()
         main_layout.addLayout(btn_layout)
+        
+        # Загружаем настройки после создания интерфейса
+        self.load_settings()
 
-    def _load_settings(self):
-        """Загрузка настроек из файла или использование значений по умолчанию"""
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.load_settings()
+
+    def load_settings(self):
+        """Полная перезагрузка настроек с обновлением интерфейса"""
         settings_path = f'.cache/{get_hash()}/userdata.json'
         
         try:
-            # Создаём директорию если её нет
             os.makedirs(os.path.dirname(settings_path), exist_ok=True)
             
-            # Если файл существует, загружаем настройки
             if os.path.exists(settings_path):
                 with open(settings_path, 'r') as file:
                     loaded_settings = json.load(file)
-                    # Проверяем наличие всех необходимых ключей
+                    # Проверяем наличие всех ключей
                     for key in self.DEFAULT_SETTINGS.keys():
                         if key not in loaded_settings:
                             loaded_settings[key] = self.DEFAULT_SETTINGS[key]
-                    return loaded_settings
+                    self.current_settings = loaded_settings
             else:
-                # Если файла нет, создаём его с настройками по умолчанию
+                self.current_settings = self.DEFAULT_SETTINGS.copy()
                 with open(settings_path, 'w') as file:
-                    json.dump(self.DEFAULT_SETTINGS, file)
-                return self.DEFAULT_SETTINGS.copy()
-                
+                    json.dump(self.current_settings, file)
         except Exception as e:
             print(f"Ошибка при загрузке настроек: {e}")
-            return self.DEFAULT_SETTINGS.copy()
+            self.current_settings = self.DEFAULT_SETTINGS.copy()
+        
+        # Обновляем интерфейс после загрузки данных
+        self._update_spinboxes()
+
+    def _update_spinboxes(self):
+        """Обновление значений в полях ввода без перезагрузки всех данных"""
+        for key, spinbox in self.spinboxes.items():
+            value = self.current_settings.get(key, self.DEFAULT_SETTINGS[key])
+            spinbox.setValue(value)
 
     def save_settings(self):
         """Сбор и сохранение всех настроек"""
-        # Собираем значения из всех полей
+        # Собираем значения из полей ввода
         settings = {
             key: spinbox.value() 
             for key, spinbox in self.spinboxes.items()
         }
+        self.current_settings = settings  # Обновляем текущие настройки
+        
         set_end(settings['END'])
         set_start(settings['START'])
 
@@ -1689,20 +1707,52 @@ class SettingsScreen(QWidget):
             os.makedirs(os.path.dirname(settings_path), exist_ok=True)
             with open(settings_path, "w") as file:
                 json.dump(settings, file, indent=2)
+            set_user_params(
+                get_user_id(),
+                settings["TARGET_INVENTORY"],
+                settings["MAX_SAFE"],
+                settings["MIN_SAFE"],
+                settings["START"],
+                settings["END"]
+            )
             print("Настройки успешно сохранены")
         except Exception as e:
             print(f"Ошибка сохранения настроек: {e}")
 
     def add_day(self):
-        # Оригинальная логика
+        # Обновляем глобальные переменные
         set_end(get_end() + 1)
+        set_start(get_start() + 1)
+
+        # Обновляем текущие настройки
+        self.current_settings['START'] = get_start()
+        self.current_settings['END'] = get_end()
+        
+        # Обновляем интерфейс
+        self._update_spinboxes()
+        
+        # Сохраняем изменения в файл
+        settings_path = f'.cache/{get_hash()}/userdata.json'
+        try:
+            with open(settings_path, 'w') as file:
+                json.dump(self.current_settings, file, indent=2)
+        except Exception as e:
+            print(f"Ошибка сохранения настроек после добавления дня: {e}")
+
+        # Бизнес-логика добавления дня
         for wh in get_warehouses():
             df = pd.read_csv(wh['file_path'])
-            df.loc[get_end() - 1, 'inventory'] = \
-                  df.loc[get_end() - 2, 'inventory'] + df.loc[get_end() - 1, 'production'] - df.loc[get_end() - 1, 'demand'] + wh['future'][0]
+            df.loc[get_end() - 1, 'inventory'] = (
+                df.loc[get_end() - 2, 'inventory'] 
+                + df.loc[get_end() - 1, 'production'] 
+                - df.loc[get_end() - 1, 'demand'] 
+                + wh['future'][0]
+            )
             wh['future'] = wh['future'][1:]
             wh['future'].append(0)
             df.to_csv(wh['file_path'], index=False)
+            update_table_file(get_user_id(), wh['table_id'], wh['future'], wh['file_path'])
+        
         print(f"Размер future: {len(wh['future'])}, Размер данных: {len(df.iloc[get_start():get_end()])}")
         print("Добавлен день")
 
@@ -1872,7 +1922,7 @@ class AccountScreen(QWidget):
         
         # Добавляем кнопки в нужном порядке
         logout_btn.clicked.connect(self.logout)
-
+        delete_account_btn.clicked.connect(self.delete_account)
         button_layout.addWidget(change_pass_btn)
         button_layout.addWidget(clear_data_btn)
         button_layout.addWidget(logout_btn)
@@ -1890,6 +1940,7 @@ class AccountScreen(QWidget):
     def delete_account(self):
         if server_delete_account(get_user_id()):
             os.remove('.cache/last_user.json')
+            shutil.rmtree(f'.cache/{get_hash()}/')
             os.execv(sys.executable, ['python'] + sys.argv)
 
 
@@ -2246,19 +2297,36 @@ class MainApp(QMainWindow):
     def show_main_interface(self, uid=-1):
         # Устанавливаем USER_ID (заглушка)
         set_user_id(uid)
+        if not os.path.exists(f'.cache/{get_hash()}'):
+            os.mkdir(f'.cache/{get_hash()}/')
+        if not os.path.exists(f'.cache/{get_hash()}/tables/'):
+            os.mkdir(f'.cache/{get_hash()}/tables/')
+        prms = get_user_params(get_user_id())
+        with open(f'.cache/{get_hash()}/userdata.json', 'w') as f:
+            json.dump({
+                "TARGET_INVENTORY": prms['target_inventory'], 
+                "MAX_SAFE": prms['max_safe'], 
+                "START": prms['start'], 
+                "END": prms['end'], 
+                "MIN_SAFE": prms['min_safe']
+            }, f)
+
         print(get_hash())
         # Инициализируем склады из кэша (если есть)
-        read_warehouses()
-        read_analys_data(get_hash())
+        if read_warehouses_list(get_user_id(), get_hash()):
+            read_analys_data(get_hash())
+            read_warehouses()
+            get_missed_tables(get_warehouses())
+            # Создаём MainInterface только при первом вызове
+            if not hasattr(self, 'main_interface'):
+                self.main_interface = MainInterface(self)
+                self.central_widget.addWidget(self.main_interface)
 
-        # Создаём MainInterface только при первом вызове
-        if not hasattr(self, 'main_interface'):
-            self.main_interface = MainInterface(self)
-            self.central_widget.addWidget(self.main_interface)
-
-        self.central_widget.setCurrentWidget(self.main_interface)
+            self.central_widget.setCurrentWidget(self.main_interface)
 
 if __name__ == "__main__":
+    if not os.path.exists('.cache/'):
+            os.mkdir('.cache/')
     app = QApplication(sys.argv)
     font = QFont("Segoe UI", 11)
     app.setFont(font)
@@ -2268,6 +2336,6 @@ if __name__ == "__main__":
 
     # Сохранение складов при выходе
     app.aboutToQuit.connect(write_warehouses)
-    app.aboutToQuit.connect(lambda : write_analys_data(get_hash()))
+    app.aboutToQuit.connect(lambda : write_analys_data(get_user_id(), get_hash()))
 
     sys.exit(app.exec())
