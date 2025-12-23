@@ -1033,9 +1033,13 @@ class HomeScreen(QWidget):
                     # Отправка в объявления
                     print(f"Создание перевозки: {quantity} единиц товара на {days} дней в объявления")
                     
-                    
-
-                    QMessageBox.information(dialog, "Успех", "Перевозка в объявления создана")
+                    r = add_offer(get_user_id(), quantity, days)      
+                    if r != None:
+                        source_warehouse = get_warehouses()[source_warehouse_index]
+                        df = pd.read_csv(source_warehouse['file_path'])
+                        df.loc[get_end() - 1, 'inventory'] -= quantity
+                        df.to_csv(source_warehouse['file_path'], index=False)
+                        QMessageBox.information(dialog, "Успех", "Перевозка в объявления создана")
                 else:
                     # Отправка в существующий склад
                     target_warehouse_index = next(
@@ -1425,27 +1429,63 @@ class Wall(QWidget):
         main_layout.addWidget(title)
         
         # Создаем прокручиваемую область
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setStyleSheet("background: transparent; border: none;")
-        main_layout.addWidget(scroll_area)
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setStyleSheet("background: transparent; border: none;")
+        main_layout.addWidget(self.scroll_area)
         
         # Контейнер для объявлений
-        container = QWidget()
-        container_layout = QVBoxLayout(container)
-        container_layout.setContentsMargins(0, 0, 0, 0)
-        container_layout.setSpacing(10)
+        self.container = QWidget()
+        self.container_layout = QVBoxLayout(self.container)
+        self.container_layout.setContentsMargins(0, 0, 0, 0)
+        self.container_layout.setSpacing(10)
+        self.scroll_area.setWidget(self.container)
+        # self.offers = None
         
-        # Данные объявлений
-        announcements = [
-            ["Компания 1", "50", "3"],
-            ["Компания 2", "200", "5"],
-            ["Склад-партнер", "150", "2"],
-            ["Логистик-Хаб", "300", "7"],
-        ]
+        # Загружаем объявления при инициализации
+        self.load_announcements()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Обновляем данные при каждом показе экрана
+        self.load_announcements()
+
+    def get_announcements(self):
+        url = 'http://147.45.108.69:1488/get_all_offers'
+        headers = {}
+        r = requests.get(url, headers=headers)
+        if r.status_code == 200:
+            rs = r.json()['offers']
+            offers = []
+            for o in rs:
+                offers.append({
+                    'name': o['company'],
+                    'quantity': o['count'],
+                    'time': o['date'],
+                    'offer_id': o['id'],
+                    'user_id': o['user_id']
+                })
+            # self.offers = offers
+            return offers
+
+    def clear_layout(self, layout):
+        """Очистка всех виджетов из layout"""
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+    def load_announcements(self):
+        """Загрузка и отображение объявлений"""
+        # Очищаем старые виджеты
+        self.clear_layout(self.container_layout)
+        
+        # Получаем актуальные данные
+        announcements = self.get_announcements()
         
         # Создание блоков объявлений
-        for announcement in announcements:
+        for ann in announcements:
             block = QWidget()
             block.setStyleSheet("""
                 QWidget {
@@ -1454,14 +1494,14 @@ class Wall(QWidget):
                     margin: 5px;
                 }
             """)
-            block.setFixedHeight(55)  # Фиксированная высота для каждого блока
+            block.setFixedHeight(55)
             
             block_layout = QHBoxLayout(block)
             block_layout.setContentsMargins(15, 5, 15, 5)
             block_layout.setSpacing(15)
             
             # Название компании
-            company_label = QLabel(announcement[0])
+            company_label = QLabel(ann["name"])
             company_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #5a3921;")
             company_label.setFixedWidth(150)
             
@@ -1471,7 +1511,7 @@ class Wall(QWidget):
             info_layout.setContentsMargins(0, 0, 0, 0)
             
             # Количество излишков
-            quantity_label = QLabel(f"Кол-во: {announcement[1]} е.т")
+            quantity_label = QLabel(f"Кол-во: {ann['quantity']} е.т")
             quantity_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #5a3921;")
             
             # Вертикальная разделительная линия
@@ -1482,14 +1522,14 @@ class Wall(QWidget):
             separator.setFixedWidth(1)
             
             # Срок доставки
-            delivery_label = QLabel(f"Срок: {announcement[2]} дн.")
+            delivery_label = QLabel(f"Срок: {ann['time']} дн.")
             delivery_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #5a3921;")
             
             info_layout.addWidget(quantity_label)
             info_layout.addWidget(separator)
             info_layout.addWidget(delivery_label)
             
-            # Кнопка оформления
+            # Кнопка оформления с привязкой данных
             order_btn = QPushButton("Оформить")
             order_btn.setStyleSheet("""
                 QPushButton {
@@ -1504,18 +1544,197 @@ class Wall(QWidget):
                     background-color: #34495e;
                 }
             """)
+            # Передаем данные объявления в обработчик
+            order_btn.clicked.connect(lambda checked, ann_data=ann: self.on_order_clicked(ann_data))
             
             block_layout.addWidget(company_label)
             block_layout.addStretch()
             block_layout.addLayout(info_layout)
             block_layout.addWidget(order_btn)
             
-            container_layout.addWidget(block)
+            self.container_layout.addWidget(block)
         
         # Добавляем растягивающийся элемент в конец
-        container_layout.addStretch()
+        self.container_layout.addStretch()
+
+    def on_order_clicked(self, announcement_data):
+        # print(announcement_data['offer_id'])
+        """Обработчик нажатия кнопки 'Оформить' с диалогом выбора склада"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Выбор склада для поставки")
+        dialog.setMinimumSize(450, 200)
         
-        scroll_area.setWidget(container)
+        dialog.setStyleSheet("""
+            QDialog {
+                background-color: #fffaf0;
+                border-radius: 10px;
+            }
+            QLabel {
+                color: #5a3921;
+                font-size: 14px;
+            }
+            QComboBox {
+                background-color: white;
+                border: 1px solid #e67e22;
+                border-radius: 5px;
+                padding: 5px;
+                font-size: 14px;
+                min-height: 30px;
+            }
+            QComboBox::drop-down {
+                width: 20px;
+                border: none;
+            }
+            QComboBox::down-arrow {
+                width: 12px;
+                height: 12px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: white;
+                border: 1px solid #e67e22;
+                border-radius: 5px;
+                selection-background-color: #ffd2a6;
+                selection-color: #5a3921;
+                color: #5a3921;
+                outline: 0;
+                padding: 4px;
+                min-width: 250px;
+            }
+            QComboBox QAbstractItemView::item {
+                height: 28px;
+                padding: 4px 8px;
+                color: #5a3921;
+            }
+            QComboBox QAbstractItemView::item:hover {
+                background-color: #ffebd9;
+                color: #5a3921;
+                border-radius: 4px;
+            }
+            QPushButton {
+                background-color: #ffd2a6;
+                color: #5a3921;
+                border: none;
+                border-radius: 5px;
+                font-weight: bold;
+                padding: 5px 15px;
+                min-width: 100px;
+            }
+            QPushButton:hover {
+                background-color: #ffa56a;
+            }
+            QPushButton#primary {
+                background-color: #27ae60;
+                color: white;
+            }
+            QPushButton#primary:hover {
+                background-color: #219955;
+            }
+        """)
+
+        main_layout = QVBoxLayout(dialog)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(15)
+        
+        # Информация о выбранном объявлении
+        info_label = QLabel(f"Компания: {announcement_data['name']}\n"
+                        f"Количество: {announcement_data['quantity']} е.т.\n"
+                        f"Срок доставки: {announcement_data['time']} дн.")
+        info_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #5a3921;")
+        main_layout.addWidget(info_label)
+        
+        # Выпадающий список для выбора склада
+        warehouse_layout = QHBoxLayout()
+        warehouse_label = QLabel("Выберите склад:")
+        warehouse_label.setMinimumWidth(150)
+        
+        warehouse_combo = QComboBox()
+        warehouse_combo.setMinimumHeight(30)
+        warehouse_combo.setView(QListView())
+        
+        # Получаем список всех складов
+        all_warehouses = get_warehouses()
+        
+        # Добавляем склады в комбобокс
+        for wh in all_warehouses:
+            wh_name = wh.get('name', '')
+            warehouse_combo.addItem(wh_name, wh_name)
+        
+        # Если нет доступных складов
+        if not all_warehouses:
+            warehouse_combo.setEnabled(False)
+            warehouse_combo.setToolTip("Нет доступных складов")
+        
+        warehouse_layout.addWidget(warehouse_label)
+        warehouse_layout.addWidget(warehouse_combo, 1)
+        main_layout.addLayout(warehouse_layout)
+        
+        # Добавляем пустое пространство
+        main_layout.addStretch()
+        
+        # Кнопки
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        
+        cancel_btn = QPushButton("Отмена")
+        cancel_btn.clicked.connect(dialog.reject)
+        
+        confirm_btn = QPushButton("Подтвердить")
+        confirm_btn.setObjectName("primary")
+        confirm_btn.clicked.connect(dialog.accept)
+        
+        button_layout.addWidget(cancel_btn)
+        button_layout.addWidget(confirm_btn)
+        main_layout.addLayout(button_layout)
+        
+        # Показываем диалог и обрабатываем результат
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            selected_warehouse = warehouse_combo.currentData()
+            
+            if not selected_warehouse:
+                QMessageBox.warning(self, "Ошибка", "Выберите склад для поставки")
+                return
+            
+            # Здесь ваша логика обработки заказа
+            # selected_warehouse - имя выбранного склада
+            # announcement_data - данные объявления
+            
+            try:
+                # Пример логики: обновление склада
+                for wh in get_warehouses():
+                    if wh.get('name') == selected_warehouse:
+                        # Добавляем товар на склад с учетом срока доставки
+                        delivery_day_index = min(announcement_data['time'] - 1, len(wh['future']) - 1)
+                        wh['future'][delivery_day_index] += announcement_data['quantity']
+                        
+                        # Обновляем файл склада
+                        df = pd.read_csv(wh['file_path'])
+                        # Здесь можно обновить данные в DataFrame при необходимости
+                        df.to_csv(wh['file_path'], index=False)
+                        
+                        # Обновляем данные в базе
+                        update_table_file(get_user_id(), wh['table_id'], wh['future'], wh['file_path'])
+                        
+                        url = 'http://147.45.108.69:1488/delete_offer'
+                        headers = {'Offerid': str(announcement_data['offer_id'])}
+                        r = requests.delete(url, headers=headers)
+                        print(r.json())
+
+                        QMessageBox.information(
+                            self,
+                            "Успешно",
+                            f"Заказ оформлен!\n"
+                            f"Товар будет доставлен на склад '{selected_warehouse}'\n"
+                            f"через {announcement_data['time']} дня(ей)"
+                        )
+                        self.load_announcements()
+                        break
+                else:
+                    QMessageBox.warning(self, "Ошибка", f"Склад '{selected_warehouse}' не найден")
+                    
+            except Exception as e:
+                QMessageBox.critical(self, "Ошибка", f"Не удалось оформить заказ:\n{str(e)}")
+                import traceback
+                traceback.print_exc()
 
 
 class SettingsScreen(QWidget):
@@ -1759,6 +1978,9 @@ class SettingsScreen(QWidget):
 class AccountScreen(QWidget):
     def __init__(self):
         super().__init__()
+
+        self.user_data = self.get_user_data()
+
         self.setStyleSheet("background-color: #fffaf0; border-radius: 15px;")
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(20, 20, 20, 20)
@@ -1792,7 +2014,7 @@ class AccountScreen(QWidget):
         company_label.setStyleSheet("color: #5a3921; font-size: 18px; font-weight: bold; padding-left: 5px;")
         company_label.setFixedWidth(350)  # Увеличена ширина метки
         
-        self.company_input = QLineEdit("ООО 'Склад-Партнер'")
+        self.company_input = QLineEdit(self.user_data['company'])
         self.company_input.setReadOnly(True)
         self.company_input.setStyleSheet("""
             QLineEdit {
@@ -1806,7 +2028,7 @@ class AccountScreen(QWidget):
         """)
         self.company_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.company_input.setFixedHeight(40)
-        
+
         company_layout.addWidget(company_label)
         company_layout.addWidget(self.company_input)
         
@@ -1818,7 +2040,7 @@ class AccountScreen(QWidget):
         email_label.setStyleSheet("color: #5a3921; font-size: 18px; font-weight: bold; padding-left: 5px;")
         email_label.setFixedWidth(350)  # Увеличена ширина метки
         
-        self.email_input = QLineEdit("user@example.com")
+        self.email_input = QLineEdit(self.user_data['login'])
         self.email_input.setReadOnly(True)
         self.email_input.setStyleSheet("""
             QLineEdit {
@@ -1923,7 +2145,8 @@ class AccountScreen(QWidget):
         # Добавляем кнопки в нужном порядке
         logout_btn.clicked.connect(self.logout)
         delete_account_btn.clicked.connect(self.delete_account)
-        button_layout.addWidget(change_pass_btn)
+        clear_data_btn.clicked.connect(self.clear_data)
+        # button_layout.addWidget(change_pass_btn)
         button_layout.addWidget(clear_data_btn)
         button_layout.addWidget(logout_btn)
         button_layout.addWidget(delete_account_btn)
@@ -1931,6 +2154,13 @@ class AccountScreen(QWidget):
         form_layout.addLayout(button_layout)
         
         main_layout.addWidget(form_container)
+
+    def get_user_data(self):
+        url = 'http://147.45.108.69:1488/get_account_data'
+        headers = {'Userid': str(get_user_id())}
+        r = requests.get(url, headers=headers)
+
+        return r.json()
 
     def logout(self):
         if os.path.exists('.cache/last_user.json'):
@@ -1942,6 +2172,10 @@ class AccountScreen(QWidget):
             os.remove('.cache/last_user.json')
             shutil.rmtree(f'.cache/{get_hash()}/')
             os.execv(sys.executable, ['python'] + sys.argv)
+
+    def clear_data(self):
+        shutil.rmtree(f'.cache/{get_hash()}/')
+        os.execv(sys.executable, ['python'] + sys.argv)
 
 
 class MenuButton(QPushButton):

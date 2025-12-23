@@ -38,7 +38,7 @@ def update_table_file(uid, tid, future, pth):
 def add_offer(uid, count, time):
     url = 'http://147.45.108.69:1488/add_offer'
     headers = {"UserId": str(uid), "Count": str(count), "Time": str(time)}
-    r = requests.post(url, headers=headers)
+    r = requests.post(url, headers=headers).json()
     if r['response'] == 'Success!':
         return r['offer_id']
     else:
@@ -70,10 +70,6 @@ def set_user_params(uid, ti=None, mxs=None, mns=None, st=None, en=None):
     r = requests.put(url, headers=headers)
     print(r.json())
 
-import os
-import pickle
-import json
-import requests
 
 def read_warehouses_list(uid, hsh):
     url = 'http://147.45.108.69:1488/get_tables_data'
